@@ -29,13 +29,17 @@ No build step, bundler, or transpiler required. The backend is a minimal Express
 ## Running locally
 
 ```bash
-# 1. Install dependencies (Express only)
+# 1. Clone the repository
+https://github.com/mmartofel/crane_load_stabilization_simulator.git
+cd crane-simulator
+
+# 2. Install dependencies (Express only)
 npm install
 
-# 2. Start the server
+# 3. Start the server
 npm start
 
-# 3. Open in browser
+# 4. Open in browser
 http://localhost:3000
 ```
 
