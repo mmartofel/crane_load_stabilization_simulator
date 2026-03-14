@@ -1,0 +1,12 @@
+{
+  "name": "crane-simulator",
+  "version": "1.0.0",
+  "description": "DIGITAL TWEEN - Tower Crane Load Stabilizer Simulator",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}

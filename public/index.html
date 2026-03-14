@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tower Crane Load Stabilization Simulator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header id="app-toolbar">
+    <span id="app-title">DIGITAL TWEEN - Tower Crane Load Stabilizer Simulator</span>
+    <button id="btn-theme" class="toolbar-btn" title="Toggle dark/light mode">☀ LIGHT</button>
+  </header>
+
+  <div id="app">
+    <!-- LEFT PANEL: Controls -->
+    <aside id="panel-left">
+      <div class="panel-header">
+        <span class="panel-icon">⚙</span>
+        <h2>CONTROL PANEL</h2>
+      </div>
+
+      <div class="control-group">
+        <h3>WIND CONDITIONS</h3>
+        <div class="slider-row">
+          <label>Wind speed</label>
+          <div class="slider-wrap">
+            <input type="range" id="sl-wind-speed" min="0" max="20" step="0.1" value="5">
+            <span class="slider-val" id="val-wind-speed">5.0 m/s</span>
+          </div>
+        </div>
+        <div class="slider-row">
+          <label>Wind direction</label>
+          <div class="slider-wrap">
+            <input type="range" id="sl-wind-dir" min="0" max="360" step="1" value="45">
+            <span class="slider-val" id="val-wind-dir">45°</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <h3>SYSTEM PARAMETERS</h3>
+        <div class="slider-row">
+          <label>Rope length L</label>
+          <div class="slider-wrap">
+            <input type="range" id="sl-rope" min="3" max="20" step="0.5" value="10">
+            <span class="slider-val" id="val-rope">10.0 m</span>
+          </div>
+        </div>
+        <div class="slider-row">
+          <label>Load mass m</label>
+          <div class="slider-wrap">
+            <input type="range" id="sl-mass" min="10" max="500" step="5" value="50">
+            <span class="slider-val" id="val-mass">50 kg</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <h3>PID CONTROLLER</h3>
+        <div class="slider-row">
+          <label>Kp (proportional)</label>
+          <div class="slider-wrap">
+            <input type="range" id="sl-kp" min="0" max="20" step="0.1" value="8.0">
+            <span class="slider-val" id="val-kp">8.0</span>
+          </div>
+        </div>
+        <div class="slider-row">
+          <label>Ki (integral)</label>
+          <div class="slider-wrap">
+            <input type="range" id="sl-ki" min="0" max="1.0" step="0.01" value="0.1">
+            <span class="slider-val" id="val-ki">0.10</span>
+          </div>
+        </div>
+        <div class="slider-row">
+          <label>Kd (derivative)</label>
+          <div class="slider-wrap">
+            <input type="range" id="sl-kd" min="0" max="10" step="0.1" value="2.5">
+            <span class="slider-val" id="val-kd">2.5</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <h3>CONTROLS</h3>
+        <div class="btn-grid">
+          <button id="btn-play" class="btn btn-primary btn-wide" data-state="paused">▶ START</button>
+          <button id="btn-reset" class="btn btn-secondary">↺ RESET</button>
+          <button id="btn-pid" class="btn btn-toggle btn-wide" data-active="true">STABILIZER: ON</button>
+          <button id="btn-impulse" class="btn btn-warning">WIND: IMPULSE</button>
+          <button id="btn-gust" class="btn btn-toggle" data-active="false">WIND: GUSTY</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- CENTER: 3D Scene -->
+    <main id="scene-container">
+      <div id="scene-header">
+        <span class="scene-title">3D SCENE — CRANE SIMULATOR</span>
+        <span id="scene-status" class="status-badge status-ok">READY</span>
+      </div>
+      <div id="threejs-mount"></div>
+    </main>
+
+    <!-- RIGHT PANEL: Telemetry + Top view + Graph -->
+    <aside id="panel-right">
+      <div class="panel-header">
+        <span class="panel-icon">📊</span>
+        <h2>TELEMETRY</h2>
+      </div>
+
+      <div class="telemetry-grid">
+        <div class="telem-row">
+          <span class="telem-label">theta_x</span>
+          <span class="telem-val" id="t-theta-x">0.0°</span>
+        </div>
+        <div class="telem-row">
+          <span class="telem-label">theta_y</span>
+          <span class="telem-val" id="t-theta-y">0.0°</span>
+        </div>
+        <div class="telem-row telem-highlight">
+          <span class="telem-label">|theta|</span>
+          <span class="telem-val" id="t-theta-abs">0.0°</span>
+        </div>
+        <div class="telem-row">
+          <span class="telem-label">Device yaw</span>
+          <span class="telem-val" id="t-yaw">0°</span>
+        </div>
+        <div class="telem-row">
+          <span class="telem-label">State</span>
+          <span class="telem-val telem-state" id="t-state">READY</span>
+        </div>
+      </div>
+
+      <div class="telem-motors">
+        <div class="motor-row">
+          <span class="motor-label">M1 (N)</span>
+          <div class="motor-bar-wrap"><div class="motor-bar" id="m1-bar"></div></div>
+          <span class="motor-val" id="m1-val">0%</span>
+        </div>
+        <div class="motor-row">
+          <span class="motor-label">M2 (E)</span>
+          <div class="motor-bar-wrap"><div class="motor-bar" id="m2-bar"></div></div>
+          <span class="motor-val" id="m2-val">0%</span>
+        </div>
+        <div class="motor-row">
+          <span class="motor-label">M3 (S)</span>
+          <div class="motor-bar-wrap"><div class="motor-bar" id="m3-bar"></div></div>
+          <span class="motor-val" id="m3-val">0%</span>
+        </div>
+        <div class="motor-row">
+          <span class="motor-label">M4 (W)</span>
+          <div class="motor-bar-wrap"><div class="motor-bar" id="m4-bar"></div></div>
+          <span class="motor-val" id="m4-val">0%</span>
+        </div>
+      </div>
+
+      <div class="panel-header panel-header-sub">
+        <span class="panel-icon">🎯</span>
+        <h3>TOP VIEW</h3>
+      </div>
+      <div id="topview-wrap">
+        <canvas id="topview-canvas" width="280" height="280"></canvas>
+      </div>
+
+      <div class="panel-header panel-header-sub">
+        <span class="panel-icon">📈</span>
+        <h3>ANGLE CHART (30s)</h3>
+      </div>
+      <div id="graph-wrap">
+        <canvas id="graph-canvas" width="320" height="160"></canvas>
+      </div>
+    </aside>
+  </div>
+
+  <footer id="app-footer">
+    <span>University of Southern Denmark</span>
+  </footer>
+
+  <!-- Three.js from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+  <script type="module" src="sim.js"></script>
+  <script type="module" src="renderer.js"></script>
+  <script type="module" src="ui.js"></script>
+</body>
+</html>
