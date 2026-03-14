@@ -41,6 +41,8 @@ http://localhost:3000
 
 The server serves all static files from `public/` and listens on port 3000.
 
+![Screenshot of DŹWIK](img/dzwik.png)
+
 ## Project structure
 
 ```
