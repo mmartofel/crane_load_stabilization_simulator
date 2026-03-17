@@ -19,11 +19,33 @@ let elProgress, elProgressInner, elProgressLabel, elProgressEta;
 let elTestCount, elRunBtn, elStopBtn, elZnBtn;
 let elTableBody;
 let elBestList;
-let elFilterL, elFilterM;
 let tooltipEl;
+let chartTooltipEl;
 
 // ---- Chart canvases ----
 let cvHeatmap, cvTime, cvScatter, cvBar;
+
+// ---- Shared palette (rank-indexed, used in time response + best sidebar) ----
+const PALETTE = ['#00d4aa', '#f0a830', '#e05555', '#7b9fe0', '#a0d470'];
+
+// ---- Shared tooltip formatter ----
+function fmtTooltip(r) {
+  const s = r.scenario, m = r.metrics;
+  return `Kp=${s.Kp.toFixed(2)}  Ki=${s.Ki.toFixed(3)}  Kd=${s.Kd.toFixed(2)}\n` +
+         `Score=${m.score?.toFixed(4)}  Ts=${m.t_settle != null ? m.t_settle.toFixed(1)+'s' : '—'}  OS=${m.overshoot_deg?.toFixed(1)}°`;
+}
+
+function showChartTooltip(e, text) {
+  if (!chartTooltipEl) return;
+  chartTooltipEl.textContent = text;
+  chartTooltipEl.style.display = 'block';
+  chartTooltipEl.style.left = (e.clientX + 14) + 'px';
+  chartTooltipEl.style.top  = (e.clientY - 12) + 'px';
+}
+
+function hideChartTooltip() {
+  if (chartTooltipEl) chartTooltipEl.style.display = 'none';
+}
 
 // ============================================================
 // Tab switching
@@ -68,11 +90,12 @@ function applyToSimulator(Kp, Ki, Kd) {
   // Trigger bounds update in simulator
   window.dispatchEvent(new CustomEvent('pid-bounds-update', { detail: { L, m } }));
 
-  // Set PID gains
-  ['kp', 'ki', 'kd'].forEach((k, i) => {
+  // Set PID gains — expand slider max if Z-N value exceeds physics bounds
+  [['kp', Kp], ['ki', Ki], ['kd', Kd]].forEach(([k, val]) => {
     const slider = document.getElementById(`sl-${k}`);
     if (!slider) return;
-    slider.value = [Kp, Ki, Kd][i];
+    if (val > parseFloat(slider.max)) slider.max = val.toFixed(3);
+    slider.value = val;
     slider.dispatchEvent(new Event('input'));
   });
   document.getElementById('tab-sim')?.click();
@@ -104,7 +127,7 @@ function updateTestCount() {
   const kiR = getRange('ki');
   const kdR = getRange('kd');
   const total = kpR.length * kiR.length * kdR.length;
-  if (elTestCount) elTestCount.textContent = `${total} testów`;
+  if (elTestCount) elTestCount.textContent = `${total} tests`;
   return total;
 }
 
@@ -168,7 +191,7 @@ async function runTests() {
       filteredResults = [...allResults];
       running = false;
       setRunningUI(false);
-      setProgress(1, allResults.length, 'Zakończono');
+      setProgress(1, allResults.length, 'Completed');
       renderTable(filteredResults);
       redrawAll();
       updateBestSidebar();
@@ -187,7 +210,7 @@ async function runZN() {
   const windSpeed = parseFloat(document.getElementById('pid-wind-speed')?.value ?? 8);
 
   elZnBtn.disabled = true;
-  elZnBtn.textContent = 'Obliczam...';
+  elZnBtn.textContent = 'Computing...';
 
   try {
     const opt = new BatchOptimizer();
@@ -200,20 +223,13 @@ async function runZN() {
       box.style.display = 'block';
       box.innerHTML = `Ku=${Ku.toFixed(2)} Tu=${Tu.toFixed(2)}s<br>Kp=${Kp.toFixed(3)} Ki=${Ki.toFixed(3)} Kd=${Kd.toFixed(3)}`;
     }
-    // Set form fields with computed values
-    const toCenter = (prefix, val) => {
-      const el = document.getElementById(`${prefix}-min`);
-      const el2 = document.getElementById(`${prefix}-max`);
-      if (el && el2) { el.value = (val * 0.7).toFixed(3); el2.value = (val * 1.3).toFixed(3); }
-    };
-    toCenter('kp', Kp); toCenter('ki', Ki); toCenter('kd', Kd);
-    updateTestCount();
+    applyToSimulator(Kp, Ki, Kd);
   } catch(e) {
     console.error('Z-N error:', e);
   }
 
   elZnBtn.disabled = false;
-  elZnBtn.textContent = 'Auto Z-N';
+  elZnBtn.textContent = 'Auto Ziegler-Nichols';
 }
 
 function setRunningUI(isRunning) {
@@ -280,7 +296,7 @@ async function loadResultsFromServer() {
 }
 
 async function clearResults() {
-  if (!confirm('Usunąć wszystkie wyniki?')) return;
+  if (!confirm('Delete all results?')) return;
   allResults = [];
   filteredResults = [];
   renderTable([]);
@@ -293,13 +309,13 @@ async function clearResults() {
 // Table
 // ============================================================
 const TABLE_COLS = [
-  { key: 'score',              label: 'Wynik',      fmt: v => v?.toFixed(4) },
+  { key: 'score',              label: 'Score',      fmt: v => v?.toFixed(4) },
   { key: 'Kp',                 label: 'Kp',         fmt: v => v?.toFixed(2), src: 'scenario' },
   { key: 'Ki',                 label: 'Ki',         fmt: v => v?.toFixed(3), src: 'scenario' },
   { key: 'Kd',                 label: 'Kd',         fmt: v => v?.toFixed(2), src: 'scenario' },
   { key: 'L',                  label: 'L',          fmt: v => v?.toFixed(1), src: 'scenario' },
   { key: 'm',                  label: 'm',          fmt: v => v?.toFixed(0), src: 'scenario' },
-  { key: 'disturbance_type',   label: 'Zakłócenie', fmt: v => v,             src: 'scenario' },
+  { key: 'disturbance_type',   label: 'Disturbance', fmt: v => v,             src: 'scenario' },
   { key: 't_settle',           label: 'Ts [s]',     fmt: v => v != null ? v.toFixed(2) : '—' },
   { key: 'overshoot_deg',      label: 'OS [°]',     fmt: v => v?.toFixed(2) },
   { key: 'steady_state_error', label: 'SSE [°]',    fmt: v => v?.toFixed(3) },
@@ -312,7 +328,7 @@ function renderTable(results) {
   if (!wrap) return;
 
   if (!results.length) {
-    wrap.innerHTML = '<tr><td colspan="12" style="text-align:center;color:#2a3441;padding:20px">Brak wyników</td></tr>';
+    wrap.innerHTML = '<tr><td colspan="12" style="text-align:center;color:#2a3441;padding:20px">No results</td></tr>';
     return;
   }
 
@@ -499,7 +515,7 @@ function drawHeatmap(canvas, results) {
   ctx.fillRect(0, 0, W, H);
 
   if (!results.length) {
-    drawEmpty(ctx, W, H, 'Brak danych — uruchom testy');
+    drawEmpty(ctx, W, H, 'No data — run tests');
     return;
   }
 
@@ -558,7 +574,7 @@ function drawHeatmap(canvas, results) {
 }
 
 // ---- Time response: top 5 results theta_mag vs t ----
-function drawTimeResponse(canvas, results) {
+function drawTimeResponse(canvas, results, hoverIdx = -1) {
   sizeCanvas(canvas);
   const W = canvas.width, H = canvas.height;
   const ctx = canvas.getContext('2d');
@@ -572,7 +588,8 @@ function drawTimeResponse(canvas, results) {
     .slice(0, 5);
 
   if (!top5.length) {
-    drawEmpty(ctx, W, H, 'Brak danych odpowiedzi czasowej');
+    drawEmpty(ctx, W, H, 'No time response data');
+    canvas._chartData = null;
     return;
   }
 
@@ -592,10 +609,11 @@ function drawTimeResponse(canvas, results) {
     ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W-pad, y); ctx.stroke();
   }
 
-  const palette = ['#00d4aa', '#f0a830', '#e05555', '#7b9fe0', '#a0d470'];
   top5.forEach((r, ri) => {
-    ctx.strokeStyle = palette[ri % palette.length];
-    ctx.lineWidth = 1.5;
+    const isHover = ri === hoverIdx;
+    ctx.strokeStyle = PALETTE[ri % PALETTE.length];
+    ctx.lineWidth = isHover ? 3 : 1.5;
+    ctx.globalAlpha = (hoverIdx >= 0 && !isHover) ? 0.35 : 1;
     ctx.beginPath();
     r.time_series.forEach((p, i) => {
       if (i === 0) ctx.moveTo(toX(p.t), toY(p.theta_mag));
@@ -603,6 +621,7 @@ function drawTimeResponse(canvas, results) {
     });
     ctx.stroke();
   });
+  ctx.globalAlpha = 1;
 
   // 1° line
   ctx.strokeStyle = '#604020';
@@ -617,6 +636,23 @@ function drawTimeResponse(canvas, results) {
   ctx.textAlign = 'left';
   ctx.fillText(`${maxTheta.toFixed(1)}°`, pad + 2, pad + 10);
   ctx.fillText(`${maxT.toFixed(0)}s`, W - pad - 2, H - 4);
+
+  // In-canvas legend (bottom-left)
+  const legendX = pad + 4, legendStartY = H - pad - 4 - (top5.length * 13);
+  ctx.font = '9px JetBrains Mono, monospace';
+  top5.forEach((r, ri) => {
+    const s = r.scenario;
+    const ly = legendStartY + ri * 13;
+    ctx.fillStyle = PALETTE[ri % PALETTE.length];
+    ctx.fillRect(legendX, ly - 7, 8, 8);
+    ctx.fillStyle = ri === hoverIdx ? '#c8d4e0' : '#4a6080';
+    ctx.textAlign = 'left';
+    ctx.fillText(`#${ri+1} Kp=${s.Kp.toFixed(1)} Ki=${s.Ki.toFixed(2)} Kd=${s.Kd.toFixed(1)}`, legendX + 12, ly);
+  });
+
+  // Store metadata for hit testing
+  canvas._chartData = top5;
+  canvas._meta = { pad, maxT, maxTheta, W, H };
 }
 
 // ---- Scatter: t_settle (x) vs overshoot (y), color = score ----
@@ -630,7 +666,7 @@ function drawScatter(canvas, results) {
 
   const valid = results.filter(r => r.metrics.t_settle != null && r.status !== 'diverged');
   if (!valid.length) {
-    drawEmpty(ctx, W, H, 'Brak stabilnych wyników');
+    drawEmpty(ctx, W, H, 'No stable results');
     return;
   }
 
@@ -671,6 +707,10 @@ function drawScatter(canvas, results) {
   ctx.fillText('Ts [s] →', W / 2, H - 2);
   ctx.textAlign = 'right';
   ctx.fillText(`OS[°]`, pad - 2, pad + 8);
+
+  // Store for hit testing
+  canvas._chartData = valid;
+  canvas._meta = { pad, maxTs, maxOs, W, H };
 }
 
 // ---- Bar chart: top 10 score (horizontal bars) ----
@@ -688,7 +728,7 @@ function drawBarChart(canvas, results) {
     .slice(0, 10);
 
   if (!top10.length) {
-    drawEmpty(ctx, W, H, 'Brak danych');
+    drawEmpty(ctx, W, H, 'No data');
     return;
   }
 
@@ -717,6 +757,10 @@ function drawBarChart(canvas, results) {
     ctx.textAlign = 'left';
     ctx.fillText(r.metrics.score?.toFixed(3), padL + barW + 3, y + barH - 2);
   });
+
+  // Store for hit testing
+  canvas._chartData = top10;
+  canvas._meta = { padL, padT, barH, W, H };
 }
 
 function drawEmpty(ctx, W, H, msg) {
@@ -733,30 +777,24 @@ function updateBestSidebar() {
   const container = document.getElementById('best-list');
   if (!container) return;
 
-  const selL = elFilterL?.value ?? 'all';
-  const selM = elFilterM?.value ?? 'all';
-
-  let src = [...allResults];
-  if (selL !== 'all') src = src.filter(r => String(r.scenario.L) === selL);
-  if (selM !== 'all') src = src.filter(r => String(r.scenario.m) === selM);
-
-  const best = src
+  const best = [...allResults]
     .filter(r => r.status !== 'diverged')
     .sort((a,b) => a.metrics.score - b.metrics.score)
     .slice(0, 5);
 
   if (!best.length) {
-    container.innerHTML = '<div class="pid-empty-state">Brak wyników</div>';
+    container.innerHTML = '<div class="pid-empty-state">No results</div>';
     return;
   }
 
   container.innerHTML = best.map((r, i) => {
     const s = r.scenario;
+    const dot = `<span class="best-color-dot" style="background:${PALETTE[i % PALETTE.length]}"></span>`;
     return `<div class="best-entry">
-      <div class="best-entry-rank">#${i+1} — Wynik: ${r.metrics.score.toFixed(4)}</div>
+      <div class="best-entry-rank">${dot}#${i+1} — Score: ${r.metrics.score.toFixed(4)}</div>
       <div class="best-entry-params">Kp=${s.Kp?.toFixed(2)}<br>Ki=${s.Ki?.toFixed(3)}<br>Kd=${s.Kd?.toFixed(2)}</div>
       <div class="best-entry-score">L=${s.L} m=${s.m} ${s.disturbance_type}</div>
-      <button class="best-apply-btn" data-kp="${s.Kp}" data-ki="${s.Ki}" data-kd="${s.Kd}">Zastosuj</button>
+      <button class="best-apply-btn" data-kp="${s.Kp}" data-ki="${s.Ki}" data-kd="${s.Kd}">Apply</button>
     </div>`;
   }).join('');
 
@@ -765,65 +803,280 @@ function updateBestSidebar() {
       applyToSimulator(parseFloat(btn.dataset.kp), parseFloat(btn.dataset.ki), parseFloat(btn.dataset.kd));
     });
   });
-
-  // Populate filter dropdowns
-  populateSidebarFilters();
-}
-
-function populateSidebarFilters() {
-  if (!elFilterL || !elFilterM) return;
-  const Ls = [...new Set(allResults.map(r => r.scenario.L))].sort((a,b)=>a-b);
-  const ms = [...new Set(allResults.map(r => r.scenario.m))].sort((a,b)=>a-b);
-
-  const prevL = elFilterL.value, prevM = elFilterM.value;
-  elFilterL.innerHTML = '<option value="all">Wszystkie L</option>' +
-    Ls.map(v => `<option value="${v}">${v}</option>`).join('');
-  elFilterM.innerHTML = '<option value="all">Wszystkie m</option>' +
-    ms.map(v => `<option value="${v}">${v}</option>`).join('');
-  elFilterL.value = prevL;
-  elFilterM.value = prevM;
 }
 
 // ============================================================
-// Heatmap tooltip
+// Time response tooltip + click
 // ============================================================
+function initTimeTooltip() {
+  if (!cvTime) return;
+  let lastHoverIdx = -1;
+
+  cvTime.addEventListener('mousemove', (e) => {
+    const data = cvTime._chartData;
+    const meta = cvTime._meta;
+    if (!data || !meta) { hideChartTooltip(); return; }
+
+    const rect = cvTime.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const { pad, maxT, maxTheta, W, H } = meta;
+
+    // Map mouse X → time index in each series
+    let bestIdx = -1, bestDist = 20;
+    data.forEach((r, ri) => {
+      const ts = r.time_series;
+      if (!ts.length) return;
+      const t = ((mx - pad) / (W - 2*pad)) * maxT;
+      // Binary-search for closest time point
+      let lo = 0, hi = ts.length - 1;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (ts[mid].t < t) lo = mid + 1; else hi = mid;
+      }
+      const pt = ts[Math.min(lo, ts.length - 1)];
+      const py = H - pad - (pt.theta_mag / maxTheta) * (H - 2*pad);
+      const dist = Math.abs(my - py);
+      if (dist < bestDist) { bestDist = dist; bestIdx = ri; }
+    });
+
+    if (bestIdx >= 0) {
+      if (bestIdx !== lastHoverIdx) {
+        lastHoverIdx = bestIdx;
+        drawTimeResponse(cvTime, filteredResults, bestIdx);
+      }
+      cvTime.style.cursor = 'pointer';
+      showChartTooltip(e, `#${bestIdx+1} | ` + fmtTooltip(data[bestIdx]));
+    } else {
+      if (lastHoverIdx !== -1) {
+        lastHoverIdx = -1;
+        drawTimeResponse(cvTime, filteredResults, -1);
+      }
+      cvTime.style.cursor = 'default';
+      hideChartTooltip();
+    }
+  });
+
+  cvTime.addEventListener('mouseleave', () => {
+    hideChartTooltip();
+    if (lastHoverIdx !== -1) {
+      lastHoverIdx = -1;
+      drawTimeResponse(cvTime, filteredResults, -1);
+    }
+    cvTime.style.cursor = 'default';
+  });
+
+  cvTime.addEventListener('click', (e) => {
+    const data = cvTime._chartData;
+    const meta = cvTime._meta;
+    if (!data || !meta) return;
+
+    const rect = cvTime.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const { pad, maxT, maxTheta, W, H } = meta;
+
+    let bestIdx = -1, bestDist = 20;
+    data.forEach((r, ri) => {
+      const ts = r.time_series;
+      if (!ts.length) return;
+      const t = ((mx - pad) / (W - 2*pad)) * maxT;
+      let lo = 0, hi = ts.length - 1;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (ts[mid].t < t) lo = mid + 1; else hi = mid;
+      }
+      const pt = ts[Math.min(lo, ts.length - 1)];
+      const py = H - pad - (pt.theta_mag / maxTheta) * (H - 2*pad);
+      const dist = Math.abs(my - py);
+      if (dist < bestDist) { bestDist = dist; bestIdx = ri; }
+    });
+
+    if (bestIdx >= 0) {
+      const s = data[bestIdx].scenario;
+      applyToSimulator(s.Kp, s.Ki, s.Kd);
+    }
+  });
+}
+
+// ============================================================
+// Scatter tooltip + click
+// ============================================================
+function initScatterTooltip() {
+  if (!cvScatter) return;
+
+  cvScatter.addEventListener('mousemove', (e) => {
+    const data = cvScatter._chartData;
+    const meta = cvScatter._meta;
+    if (!data || !meta) { hideChartTooltip(); return; }
+
+    const rect = cvScatter.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const { pad, maxTs, maxOs, W, H } = meta;
+
+    let best = null, bestDist2 = 10 * 10;
+    data.forEach(r => {
+      const px = pad + (r.metrics.t_settle / maxTs) * (W - 2*pad);
+      const py = H - pad - (r.metrics.overshoot_deg / maxOs) * (H - 2*pad);
+      const d2 = (mx - px) ** 2 + (my - py) ** 2;
+      if (d2 < bestDist2) { bestDist2 = d2; best = r; }
+    });
+
+    if (best) {
+      cvScatter.style.cursor = 'pointer';
+      showChartTooltip(e, fmtTooltip(best));
+    } else {
+      cvScatter.style.cursor = 'default';
+      hideChartTooltip();
+    }
+  });
+
+  cvScatter.addEventListener('mouseleave', () => {
+    hideChartTooltip();
+    cvScatter.style.cursor = 'default';
+  });
+
+  cvScatter.addEventListener('click', (e) => {
+    const data = cvScatter._chartData;
+    const meta = cvScatter._meta;
+    if (!data || !meta) return;
+
+    const rect = cvScatter.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const { pad, maxTs, maxOs, W, H } = meta;
+
+    let best = null, bestDist2 = 10 * 10;
+    data.forEach(r => {
+      const px = pad + (r.metrics.t_settle / maxTs) * (W - 2*pad);
+      const py = H - pad - (r.metrics.overshoot_deg / maxOs) * (H - 2*pad);
+      const d2 = (mx - px) ** 2 + (my - py) ** 2;
+      if (d2 < bestDist2) { bestDist2 = d2; best = r; }
+    });
+
+    if (best) {
+      const s = best.scenario;
+      applyToSimulator(s.Kp, s.Ki, s.Kd);
+    }
+  });
+}
+
+// ============================================================
+// Bar chart tooltip + click
+// ============================================================
+function initBarTooltip() {
+  if (!cvBar) return;
+
+  function getRowIdx(my) {
+    const meta = cvBar._meta;
+    if (!meta) return -1;
+    const { padT, barH } = meta;
+    const i = Math.floor((my - padT) / (barH + 2));
+    const data = cvBar._chartData;
+    if (!data || i < 0 || i >= data.length) return -1;
+    return i;
+  }
+
+  cvBar.addEventListener('mousemove', (e) => {
+    const data = cvBar._chartData;
+    if (!data) { hideChartTooltip(); return; }
+
+    const rect = cvBar.getBoundingClientRect();
+    const my = e.clientY - rect.top;
+    const i = getRowIdx(my);
+
+    if (i >= 0) {
+      cvBar.style.cursor = 'pointer';
+      showChartTooltip(e, fmtTooltip(data[i]));
+    } else {
+      cvBar.style.cursor = 'default';
+      hideChartTooltip();
+    }
+  });
+
+  cvBar.addEventListener('mouseleave', () => {
+    hideChartTooltip();
+    cvBar.style.cursor = 'default';
+  });
+
+  cvBar.addEventListener('click', (e) => {
+    const data = cvBar._chartData;
+    if (!data) return;
+
+    const rect = cvBar.getBoundingClientRect();
+    const my = e.clientY - rect.top;
+    const i = getRowIdx(my);
+
+    if (i >= 0) {
+      const s = data[i].scenario;
+      applyToSimulator(s.Kp, s.Ki, s.Kd);
+    }
+  });
+}
+
+// ============================================================
+// Heatmap tooltip + click
+// ============================================================
+function heatmapHitTest(mx, my) {
+  if (!filteredResults.length) return null;
+  const W = cvHeatmap.width, H = cvHeatmap.height;
+  const pad = 32;
+
+  const KpVals = [...new Set(filteredResults.map(r => r.scenario.Kp))].sort((a,b)=>a-b);
+  const KdVals = [...new Set(filteredResults.map(r => r.scenario.Kd))].sort((a,b)=>a-b);
+  if (!KpVals.length || !KdVals.length) return null;
+
+  const cellW = (W - 2*pad) / KpVals.length;
+  const cellH = (H - 2*pad) / KdVals.length;
+  const xi = Math.floor((mx - pad) / cellW);
+  const yi = KdVals.length - 1 - Math.floor((my - pad) / cellH);
+
+  if (xi < 0 || xi >= KpVals.length || yi < 0 || yi >= KdVals.length) return null;
+
+  const Kp = KpVals[xi], Kd = KdVals[yi];
+  // Pick the best (lowest score) result for this Kp/Kd cell
+  const cellResults = filteredResults.filter(r => r.scenario.Kp === Kp && r.scenario.Kd === Kd);
+  if (!cellResults.length) return null;
+  const best = cellResults.reduce((a, b) => a.metrics.score <= b.metrics.score ? a : b);
+  return best;
+}
+
 function initHeatmapTooltip() {
   if (!cvHeatmap) return;
   tooltipEl = document.getElementById('heatmap-tooltip');
 
   cvHeatmap.addEventListener('mousemove', (e) => {
-    if (!filteredResults.length || !tooltipEl) return;
+    if (!tooltipEl) return;
     const rect = cvHeatmap.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-    const W = cvHeatmap.width, H = cvHeatmap.height;
-    const pad = 32;
+    const best = heatmapHitTest(e.clientX - rect.left, e.clientY - rect.top);
 
-    const KpVals = [...new Set(filteredResults.map(r => r.scenario.Kp))].sort((a,b)=>a-b);
-    const KdVals = [...new Set(filteredResults.map(r => r.scenario.Kd))].sort((a,b)=>a-b);
-    if (!KpVals.length || !KdVals.length) return;
-
-    const cellW = (W - 2*pad) / KpVals.length;
-    const cellH = (H - 2*pad) / KdVals.length;
-    const xi = Math.floor((mx - pad) / cellW);
-    const yi = KdVals.length - 1 - Math.floor((my - pad) / cellH);
-
-    if (xi >= 0 && xi < KpVals.length && yi >= 0 && yi < KdVals.length) {
-      const Kp = KpVals[xi], Kd = KdVals[yi];
-      const match = filteredResults.find(r => r.scenario.Kp === Kp && r.scenario.Kd === Kd);
-      if (match) {
-        tooltipEl.style.display = 'block';
-        tooltipEl.style.left = (e.clientX + 12) + 'px';
-        tooltipEl.style.top = (e.clientY - 10) + 'px';
-        tooltipEl.textContent = `Kp=${Kp.toFixed(2)} Kd=${Kd.toFixed(2)} | Wynik=${match.metrics.score?.toFixed(4)}`;
-      }
+    if (best) {
+      const s = best.scenario;
+      tooltipEl.style.display = 'block';
+      tooltipEl.style.left = (e.clientX + 12) + 'px';
+      tooltipEl.style.top  = (e.clientY - 10) + 'px';
+      tooltipEl.textContent =
+        `Kp=${s.Kp.toFixed(2)}  Ki=${s.Ki.toFixed(3)}  Kd=${s.Kd.toFixed(2)} | Score=${best.metrics.score?.toFixed(4)}`;
+      cvHeatmap.style.cursor = 'pointer';
     } else {
       tooltipEl.style.display = 'none';
+      cvHeatmap.style.cursor = 'default';
     }
   });
 
   cvHeatmap.addEventListener('mouseleave', () => {
     if (tooltipEl) tooltipEl.style.display = 'none';
+    cvHeatmap.style.cursor = 'default';
+  });
+
+  cvHeatmap.addEventListener('click', (e) => {
+    const rect = cvHeatmap.getBoundingClientRect();
+    const best = heatmapHitTest(e.clientX - rect.left, e.clientY - rect.top);
+    if (best) {
+      const s = best.scenario;
+      applyToSimulator(s.Kp, s.Ki, s.Kd);
+    }
   });
 }
 
@@ -849,8 +1102,6 @@ function init() {
   elRunBtn        = document.getElementById('pid-run-btn');
   elStopBtn       = document.getElementById('pid-stop-btn');
   elZnBtn         = document.getElementById('pid-zn-btn');
-  elFilterL       = document.getElementById('best-filter-L');
-  elFilterM       = document.getElementById('best-filter-m');
 
   cvHeatmap = document.getElementById('chart-heatmap');
   cvTime    = document.getElementById('chart-time');
@@ -884,18 +1135,19 @@ function init() {
   // Table filter
   document.getElementById('pid-table-filter')?.addEventListener('input', filterTable);
 
-  // Sidebar filters
-  elFilterL?.addEventListener('change', updateBestSidebar);
-  elFilterM?.addEventListener('change', updateBestSidebar);
-
   // Modal close
   document.getElementById('pid-modal-close')?.addEventListener('click', closeModal);
   document.getElementById('pid-modal-backdrop')?.addEventListener('click', (e) => {
     if (e.target === e.currentTarget) closeModal();
   });
 
+  chartTooltipEl = document.getElementById('chart-tooltip');
+
   attachSort();
   initHeatmapTooltip();
+  initTimeTooltip();
+  initScatterTooltip();
+  initBarTooltip();
   updateTestCount();
 
   // Load saved results from server

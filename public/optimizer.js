@@ -37,7 +37,7 @@ export class TestResult {
 export function computeScore(metrics, weights = {
   w_ISE: 0.3, w_IAE: 0.2, w_ITAE: 0.3, w_settle: 0.15, w_overshoot: 0.05
 }) {
-  const ISE_MAX = 500, IAE_MAX = 100, ITAE_MAX = 3000, SETTLE_MAX = 60, OS_MAX = 30;
+  const ISE_MAX = 5, IAE_MAX = 10, ITAE_MAX = 100, SETTLE_MAX = 30, OS_MAX = 20;
   const settle = metrics.t_settle ?? SETTLE_MAX;
   return (
     weights.w_ISE      * Math.min(metrics.ISE / ISE_MAX, 1) +

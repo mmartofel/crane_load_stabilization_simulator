@@ -616,6 +616,17 @@
   line-height: 2;
 }
 
+/* ---- Best params color dot ---- */
+.best-color-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
 /* ---- Heatmap tooltip ---- */
 .heatmap-tooltip {
   position: fixed;
