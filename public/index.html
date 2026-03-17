@@ -7,10 +7,15 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="results.css">
 </head>
 <body>
   <header id="app-toolbar">
     <span id="app-title">DIGITAL TWEEN - Tower Crane Load Stabilizer Simulator</span>
+    <nav id="tab-nav">
+      <button id="tab-sim" class="tab-btn active">▶ SIMULATOR</button>
+      <button id="tab-pid" class="tab-btn">📊 PID TESTS</button>
+    </nav>
     <button id="btn-theme" class="toolbar-btn" title="Toggle dark/light mode">☀ LIGHT</button>
   </header>
 
@@ -175,6 +180,242 @@
     </aside>
   </div>
 
+  <!-- ============================================================
+       PID OPTIMIZER SECTION
+       ============================================================ -->
+  <section id="pid-tester" style="display:none">
+
+    <!-- A: Form panel (left) -->
+    <div class="pid-form-panel">
+      <h3>Test Parameters</h3>
+
+      <div class="form-group">
+        <label>Kp — range and steps</label>
+        <div class="pid-range-row">
+          <input type="number" id="kp-min" class="pid-range-input" value="4" min="0" max="20" step="0.1">
+          <input type="number" id="kp-max" class="pid-range-input" value="12" min="0" max="20" step="0.1">
+          <input type="number" id="kp-steps" class="pid-range-input" value="3" min="1" max="10" step="1">
+        </div>
+        <div class="pid-range-labels"><span>min</span><span>max</span><span>steps</span></div>
+      </div>
+
+      <div class="form-group">
+        <label>Ki — range and steps</label>
+        <div class="pid-range-row">
+          <input type="number" id="ki-min" class="pid-range-input" value="0.05" min="0" max="1" step="0.01">
+          <input type="number" id="ki-max" class="pid-range-input" value="0.3" min="0" max="1" step="0.01">
+          <input type="number" id="ki-steps" class="pid-range-input" value="3" min="1" max="10" step="1">
+        </div>
+        <div class="pid-range-labels"><span>min</span><span>max</span><span>steps</span></div>
+      </div>
+
+      <div class="form-group">
+        <label>Kd — range and steps</label>
+        <div class="pid-range-row">
+          <input type="number" id="kd-min" class="pid-range-input" value="1" min="0" max="10" step="0.1">
+          <input type="number" id="kd-max" class="pid-range-input" value="4" min="0" max="10" step="0.1">
+          <input type="number" id="kd-steps" class="pid-range-input" value="3" min="1" max="10" step="1">
+        </div>
+        <div class="pid-range-labels"><span>min</span><span>max</span><span>steps</span></div>
+      </div>
+
+      <div class="form-group">
+        <label>Rope length L [m]</label>
+        <select id="pid-L" class="pid-select">
+          <option value="3">L = 3 m</option>
+          <option value="5">L = 5 m</option>
+          <option value="10" selected>L = 10 m</option>
+          <option value="15">L = 15 m</option>
+          <option value="20">L = 20 m</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Load mass m [kg]</label>
+        <select id="pid-m" class="pid-select">
+          <option value="10">m = 10 kg</option>
+          <option value="50" selected>m = 50 kg</option>
+          <option value="100">m = 100 kg</option>
+          <option value="200">m = 200 kg</option>
+          <option value="500">m = 500 kg</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Disturbance type</label>
+        <select id="pid-dist" class="pid-select">
+          <option value="step" selected>Step</option>
+          <option value="impulse">Impulse</option>
+          <option value="ramp">Ramp</option>
+          <option value="gust">Wind gusts</option>
+        </select>
+      </div>
+
+      <div id="pid-physics-info" class="pid-physics-info">
+        T=<span id="pi-T">—</span>s &nbsp;|&nbsp;
+        Kp_crit≈<span id="pi-Kpcrit">—</span> &nbsp;|&nbsp;
+        Kd_max≈<span id="pi-Kdmax">—</span>
+      </div>
+
+      <div class="form-group">
+        <label>Wind speed [m/s]</label>
+        <input type="number" id="pid-wind-speed" value="8" min="0" max="20" step="0.5"
+               style="background:#0d1117;border:1px solid #2a3441;color:#c8d4e0;padding:4px 8px;font-family:'JetBrains Mono',monospace;font-size:11px;border-radius:3px;width:80px">
+      </div>
+
+      <div class="pid-test-count" id="pid-test-count">27 tests</div>
+
+      <div class="progress-wrap">
+        <div class="progress-bar-outer">
+          <div class="progress-bar-inner" id="progress-bar-inner"></div>
+        </div>
+        <div class="progress-text">
+          <span id="progress-label">Ready</span>
+        </div>
+      </div>
+
+      <div class="pid-btn-group">
+        <button id="pid-run-btn" class="pid-btn pid-btn-primary">▶ Run tests</button>
+        <button id="pid-stop-btn" class="pid-btn pid-btn-warning" disabled>■ Stop</button>
+        <button id="pid-zn-btn" class="pid-btn pid-btn-secondary">Auto Ziegler-Nichols</button>
+      </div>
+
+      <div id="zn-result" class="zn-result-box" style="display:none"></div>
+
+      <div class="pid-btn-group" style="margin-top:auto">
+        <button id="pid-export-btn" class="pid-btn pid-btn-secondary">↓ Export CSV</button>
+        <button id="pid-clear-btn" class="pid-btn pid-btn-danger">✕ Clear results</button>
+      </div>
+    </div>
+
+    <!-- B+C: Main content -->
+    <div class="pid-main-content">
+
+      <!-- B: Charts 2x2 grid -->
+      <div class="pid-charts-grid">
+        <div class="pid-chart-card">
+          <h4>Heatmap Kp/Kd (score)</h4>
+          <canvas id="chart-heatmap"></canvas>
+        </div>
+        <div class="pid-chart-card">
+          <h4>Time response |θ| — top 5</h4>
+          <canvas id="chart-time"></canvas>
+        </div>
+        <div class="pid-chart-card">
+          <h4>Ts vs Overshoot</h4>
+          <canvas id="chart-scatter"></canvas>
+        </div>
+        <div class="pid-chart-card">
+          <h4>Top 10 — score ranking</h4>
+          <canvas id="chart-bar"></canvas>
+        </div>
+      </div>
+
+      <!-- C: Results table -->
+      <div class="pid-table-section">
+        <h3>Test results</h3>
+        <div class="pid-table-controls">
+          <input type="text" id="pid-table-filter" placeholder="Filter (Kp, Ki, Kd, status...)">
+        </div>
+        <div class="pid-table-wrap">
+          <table id="pid-results-table">
+            <thead>
+              <tr>
+                <th data-col="score">Score <span class="sort-arrow">▲</span></th>
+                <th data-col="Kp">Kp <span class="sort-arrow"></span></th>
+                <th data-col="Ki">Ki <span class="sort-arrow"></span></th>
+                <th data-col="Kd">Kd <span class="sort-arrow"></span></th>
+                <th data-col="L">L <span class="sort-arrow"></span></th>
+                <th data-col="m">m <span class="sort-arrow"></span></th>
+                <th data-col="disturbance_type">Disturbance <span class="sort-arrow"></span></th>
+                <th data-col="t_settle">Ts [s] <span class="sort-arrow"></span></th>
+                <th data-col="overshoot_deg">OS [°] <span class="sort-arrow"></span></th>
+                <th data-col="steady_state_error">SSE [°] <span class="sort-arrow"></span></th>
+                <th data-col="ISE">ISE <span class="sort-arrow"></span></th>
+                <th data-col="status">Status <span class="sort-arrow"></span></th>
+              </tr>
+            </thead>
+            <tbody id="pid-table-body">
+              <tr><td colspan="12" style="text-align:center;color:#2a3441;padding:20px">No results — run tests</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar: best params -->
+    <div class="best-params-sidebar">
+      <h3>Best parameters</h3>
+      <div id="best-list">
+        <div class="pid-empty-state">No results</div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- Modal -->
+  <div id="pid-modal-backdrop" style="display:none" class="pid-modal-backdrop">
+    <div class="pid-modal">
+      <button id="pid-modal-close" class="pid-modal-close">✕</button>
+      <h3>Test details</h3>
+      <div class="pid-modal-grid">
+        <div class="pid-modal-field">
+          <div class="pid-modal-field-label">Kp</div>
+          <div class="pid-modal-field-val" id="modal-kp">—</div>
+        </div>
+        <div class="pid-modal-field">
+          <div class="pid-modal-field-label">Ki</div>
+          <div class="pid-modal-field-val" id="modal-ki">—</div>
+        </div>
+        <div class="pid-modal-field">
+          <div class="pid-modal-field-label">Kd</div>
+          <div class="pid-modal-field-val" id="modal-kd">—</div>
+        </div>
+        <div class="pid-modal-field">
+          <div class="pid-modal-field-label">L [m]</div>
+          <div class="pid-modal-field-val" id="modal-L">—</div>
+        </div>
+        <div class="pid-modal-field">
+          <div class="pid-modal-field-label">m [kg]</div>
+          <div class="pid-modal-field-val" id="modal-m">—</div>
+        </div>
+        <div class="pid-modal-field">
+          <div class="pid-modal-field-label">Disturbance</div>
+          <div class="pid-modal-field-val" id="modal-dist">—</div>
+        </div>
+        <div class="pid-modal-field">
+          <div class="pid-modal-field-label">Score</div>
+          <div class="pid-modal-field-val" id="modal-score" style="color:#00d4aa">—</div>
+        </div>
+        <div class="pid-modal-field">
+          <div class="pid-modal-field-label">Ts [s]</div>
+          <div class="pid-modal-field-val" id="modal-tsettle">—</div>
+        </div>
+        <div class="pid-modal-field">
+          <div class="pid-modal-field-label">Overshoot</div>
+          <div class="pid-modal-field-val" id="modal-overshoot">—</div>
+        </div>
+        <div class="pid-modal-field">
+          <div class="pid-modal-field-label">SSE [°]</div>
+          <div class="pid-modal-field-val" id="modal-sse">—</div>
+        </div>
+        <div class="pid-modal-field" style="grid-column:span 2">
+          <div class="pid-modal-field-label">Status</div>
+          <div class="pid-modal-field-val"><span id="modal-status" class="status-badge">—</span></div>
+        </div>
+      </div>
+      <canvas id="modal-canvas" width="580" height="160"></canvas>
+      <div class="pid-modal-actions">
+        <button id="modal-apply-btn" class="pid-btn pid-btn-primary">Apply to simulator</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Heatmap tooltip -->
+  <div id="heatmap-tooltip" class="heatmap-tooltip"></div>
+  <!-- Shared chart tooltip -->
+  <div id="chart-tooltip" class="heatmap-tooltip" style="white-space:pre"></div>
+
   <footer id="app-footer">
     <span>University of Southern Denmark</span>
   </footer>
@@ -186,5 +427,6 @@
   <script type="module" src="sim.js"></script>
   <script type="module" src="renderer.js"></script>
   <script type="module" src="ui.js"></script>
+  <script type="module" src="results-ui.js"></script>
 </body>
 </html>

@@ -1,13 +1,15 @@
 # 🏗️ Tower Crane Load Stabilization Simulator
 ### *DŹWIK — Digital Twin of an Active Load Stabilizer*
 
-> An interactive physics-based web simulator of a tower crane with an active drone-propeller load stabilization system. Built as a digital twin prototype for educational and research purposes.
+> An interactive physics-based web simulator of a tower crane with an active drone-propeller load stabilization system, plus an automated PID optimizer. Built as a digital twin prototype for educational and research purposes.
 
 ---
 
 ## 🎯 What it does
 
 The simulator models a suspended load (cargo) on a crane rope as a **spherical pendulum**. Disturbances (wind gusts, impulses) cause the load to swing. A **cascade PID controller** drives four drone-style propellers mounted at the mid-cable point to counteract the swing in real time.
+
+A dedicated **PID Optimizer tab** allows automated grid-search and Ziegler-Nichols tuning across arbitrary parameter ranges and test scenarios, with interactive charts for analysis and one-click gain application.
 
 ### ✨ Key features
 
@@ -17,17 +19,22 @@ The simulator models a suspended load (cargo) on a crane rope as a **spherical p
 | 🎛️ **PID stabilizer** | Independent X/Y axis controllers with tunable Kp, Ki, Kd gains |
 | 🚁 **Propeller mixer** | Maps 2D force output to N/E/S/W motor PWM signals with yaw correction |
 | 🌐 **3D visualization** | Three.js scene with crane structure, spinning propellers, force vectors, wind arrow, and load trajectory trail |
-| 🗺️ **2D top-down view** | Live load position, force vectors, and alarm circle |
-| 📈 **Angle history chart** | Last 30 seconds of θx, θy, \|θ\| |
-| 📡 **Live telemetry** | Angles, motor PWM bars, state badge (STABILIZING / WARNING / ALARM) |
+| 🗺️ **2D top-down view** | Live load position, force vectors, trail, and alarm circle (5°/10°/15° rings) |
+| 📈 **Angle history chart** | Last 30 seconds of θx, θy, \|θ\| with ±15° warning lines |
+| 📡 **Live telemetry** | Angles, motor PWM bars (bidirectional teal/orange), state badge (READY / STABILIZING / WARNING / DRIFTING / ALARM) |
 | 🌗 **Dark / light theme** | Toggle between dark industrial and light UI |
-| 💨 **Wind controls** | Speed/direction sliders, wind impulse button, gusty wind mode |
+| 💨 **Wind controls** | Speed/direction sliders, step/impulse/ramp disturbance types, gusty wind mode |
+| 🔬 **PID Optimizer** | Automated grid-search + Ziegler-Nichols tuning with physics-aware range suggestions |
+| 📊 **Interactive charts** | Heatmap, time-response, scatter, bar — all with hover tooltips and click-to-apply |
+| 💾 **Results persistence** | Save/load test results via server API; CSV export |
 
 ---
 
 ## 🖥️ Screenshot
 
-![Screenshot of DŹWIK](img/dzwik.png)
+![Screenshot of DŹWIK](img/dzwik01.png)
+
+![Screenshot of DŹWIK](img/dzwik02.png)
 
 ---
 
@@ -66,19 +73,23 @@ The server serves all static files from `public/` and listens on port 3000.
 
 ```
 crane-simulator/
-├── 🖥️  server.js          # Express static-file server
+├── 🖥️  server.js               # Express static-file server + REST API for results persistence
 ├── 📋  package.json
 └── 📁  public/
-    ├── 🏠  index.html     # App shell — 3-column layout (controls | 3D scene | telemetry)
-    ├── 🎨  style.css      # CSS variables, dark/light themes, layout
-    ├── ⚙️   sim.js         # Physics: Pendulum, PIDController, PropellerMixer classes
-    ├── 🌐  renderer.js    # Three.js 3D scene (CraneRenderer class)
-    └── 🎮  ui.js          # Animation loop, slider/button wiring, canvas charts
+    ├── 🏠  index.html           # App shell — tabbed layout (SIMULATOR | PID TESTS)
+    ├── 🎨  style.css            # CSS variables, dark/light themes, layout
+    ├── 🎨  results.css          # PID optimizer tab styling
+    ├── ⚙️   sim.js              # Physics: Pendulum, PIDController, PropellerMixer classes
+    ├── 🌐  renderer.js          # Three.js 3D scene (CraneRenderer class)
+    ├── 🎮  ui.js                # Animation loop, slider/button wiring, canvas charts
+    ├── 🔬  optimizer.js         # BatchOptimizer, Ziegler-Nichols, scoring, physics range calc
+    ├── ⚡  optimizer-worker.js  # Web Worker for large batch grid-search (>500 tests)
+    └── 📊  results-ui.js        # PID tab UI: charts, tooltips, table, modal, sidebar, API calls
 ```
 
 ---
 
-## 🎮 Controls
+## 🎮 Controls — Simulator tab
 
 | Control | Description |
 |---|---|
@@ -92,6 +103,30 @@ crane-simulator/
 | 💥 Wind impulse | Apply a 3× wind burst for 1 second |
 | 🌪️ Gusty wind | Enable random wind magnitude variations |
 | ☀️ LIGHT / 🌙 DARK | Toggle UI theme |
+
+---
+
+## 🔬 PID Optimizer tab
+
+Switch to the **PID TESTS** tab to access automated tuning tools:
+
+| Feature | Description |
+|---|---|
+| 📐 **Grid search** | Sweep Kp × Ki × Kd ranges with configurable step counts across multiple L/m/disturbance scenarios |
+| ⚡ **Web Worker** | Batches > 500 tests run in a background worker to keep the UI responsive |
+| 🎚️ **Ziegler-Nichols** | Binary-search for ultimate gain (Ku) and oscillation period (Tu); auto-computes Kp/Ki/Kd |
+| 📏 **Physics ranges** | Suggested Kp/Ki/Kd bounds derived from rope length (T = 2π√(L/g)) and load mass |
+| 📊 **Heatmap** | Kp × Kd score grid — hover for values, click to apply |
+| 📈 **Time response** | Top-5 theta(t) curves — hover highlights curve, click to apply |
+| 🎯 **Scatter plot** | Settling time vs. overshoot — "good zone" (Ts < 10 s, OS < 5°), hover/click |
+| 📉 **Bar chart** | Top-10 composite scores — hover/click to apply |
+| 🏆 **Best sidebar** | Top-5 ranked results always visible with one-click apply |
+| 📋 **Results table** | 12-column sortable/filterable table; row click opens full detail modal |
+| 💾 **Persistence** | Save to server, load saved results, export as CSV |
+
+### Composite score metrics
+
+Each test is evaluated on: **ISE**, **IAE**, **ITAE**, settling time (Ts), overshoot, and steady-state error — combined into a single weighted score (lower = better).
 
 ---
 
