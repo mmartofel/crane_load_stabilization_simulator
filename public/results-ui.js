@@ -115,7 +115,7 @@ function getRange(prefix) {
   const min = parseFloat(document.getElementById(`${prefix}-min`)?.value ?? 0);
   const max = parseFloat(document.getElementById(`${prefix}-max`)?.value ?? 1);
   const steps = parseInt(document.getElementById(`${prefix}-steps`)?.value ?? 3);
-  return linspace(min, max, Math.max(1, Math.min(steps, 10)));
+  return linspace(min, max, Math.max(1, Math.min(steps, 50)));
 }
 
 function getPidL()    { return parseFloat(document.getElementById('pid-L').value); }
@@ -251,7 +251,7 @@ async function saveResultsToServer(results) {
     const resp = await fetch('/api/results', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ results })
+      body: JSON.stringify({ results: results.map(({ time_series, ...rest }) => rest) })
     });
     const data = await resp.json();
     console.log('Saved:', data);
