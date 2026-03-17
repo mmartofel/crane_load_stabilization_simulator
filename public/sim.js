@@ -63,6 +63,103 @@ export class Pendulum {
   reset() {
     this.state = { theta_x: 0, theta_y: 0, omega_x: 0, omega_y: 0 };
   }
+
+  static runHeadless(scenario) {
+    const { L, m, Kp, Ki, Kd, wind_speed, wind_dir,
+            disturbance_type, max_time_s = 60, dt = 0.005 } = scenario;
+
+    const pend = new Pendulum({ L, m });
+    const pidX = new PIDController({ Kp, Ki, Kd });
+    const pidY = new PIDController({ Kp, Ki, Kd });
+    const mixer = new PropellerMixer();
+
+    const result = {
+      scenario,
+      timestamp: new Date().toISOString(),
+      metrics: { ISE: 0, IAE: 0, ITAE: 0, t_settle: null,
+                 overshoot_deg: 0, steady_state_error: 0, score: 0 },
+      time_series: [],
+      status: 'ok'
+    };
+
+    const totalSteps = Math.ceil(max_time_s / dt);
+    const sampleInterval = Math.round(0.1 / dt); // every 0.1s
+    let stableAccum = 0;
+    let maxTheta = 0;
+
+    function getWindForce(t) {
+      const wRad = wind_dir;
+      let ws = 0;
+      switch (disturbance_type) {
+        case 'step':    ws = t >= 1 ? wind_speed : 0; break;
+        case 'impulse': ws = (t >= 1 && t <= 1.5) ? wind_speed * 3 : 0; break;
+        case 'ramp':    ws = t < 10 ? wind_speed * (t / 10) : wind_speed; break;
+        case 'gust':    ws = wind_speed; break;
+        default:        ws = t >= 1 ? wind_speed : 0;
+      }
+      return { fx: ws * Math.sin(wRad), fy: ws * Math.cos(wRad) };
+    }
+
+    let gustTimer = 0, gustMag = 0;
+
+    for (let step = 0; step < totalSteps; step++) {
+      const t = step * dt;
+
+      if (disturbance_type === 'gust') {
+        gustTimer -= dt;
+        if (gustTimer <= 0) {
+          gustTimer = 2 + Math.random() * 3;
+          gustMag = (Math.random() - 0.5) * 0.8;
+        }
+      }
+
+      let { fx, fy } = getWindForce(t);
+      if (disturbance_type === 'gust') { fx *= (1 + gustMag); fy *= (1 + gustMag); }
+
+      const Fx = pidX.compute(pend.state.theta_x, dt);
+      const Fy = pidY.compute(pend.state.theta_y, dt);
+      mixer.mix(Fx, Fy, 0);
+      const force = mixer.getForce(0);
+      const forceScale = 1.0 / mixer.scale;
+
+      pend.step(dt, fx, fy, force.Fx * forceScale, force.Fy * forceScale);
+
+      const tx = pend.state.theta_x, ty = pend.state.theta_y;
+      const theta_mag = Math.sqrt(tx*tx + ty*ty);
+      const theta_deg = theta_mag * 180 / Math.PI;
+
+      result.metrics.ISE  += theta_mag * theta_mag * dt;
+      result.metrics.IAE  += theta_mag * dt;
+      result.metrics.ITAE += t * theta_mag * dt;
+
+      if (theta_deg > maxTheta) maxTheta = theta_deg;
+
+      if (theta_deg < 1.0) stableAccum += dt;
+      else stableAccum = 0;
+      if (stableAccum >= 2.0 && result.metrics.t_settle === null) {
+        result.metrics.t_settle = t - 2.0;
+      }
+
+      if (theta_deg > 45) { result.status = 'diverged'; break; }
+
+      if (step % sampleInterval === 0) {
+        result.time_series.push({
+          t, theta_x: tx * 180/Math.PI, theta_y: ty * 180/Math.PI,
+          theta_mag: theta_deg,
+          M1: mixer.pwm[0], M2: mixer.pwm[1], M3: mixer.pwm[2], M4: mixer.pwm[3]
+        });
+      }
+    }
+
+    if (result.status === 'ok' && result.metrics.t_settle === null) result.status = 'timeout';
+
+    result.metrics.overshoot_deg = maxTheta;
+    const last5 = result.time_series.slice(-50);
+    result.metrics.steady_state_error = last5.length
+      ? last5.reduce((s, p) => s + p.theta_mag, 0) / last5.length : 0;
+
+    return result;
+  }
 }
 
 // ============================================================
@@ -134,4 +231,4 @@ export class PropellerMixer {
 
 // ============================================================
 // Export via window for non-module scripts (Three.js compat)
-window.__sim = { Pendulum, PIDController, PropellerMixer };
+if (typeof window !== 'undefined') window.__sim = { Pendulum, PIDController, PropellerMixer };
