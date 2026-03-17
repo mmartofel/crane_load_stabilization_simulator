@@ -4,6 +4,7 @@
 
 import { Pendulum, PIDController, PropellerMixer } from './sim.js';
 import { CraneRenderer } from './renderer.js';
+import { computePhysicsRanges } from './optimizer.js';
 
 // ---- Simulation state ----
 let running = false;
@@ -62,6 +63,7 @@ function init() {
   const mount = document.getElementById('threejs-mount');
   craneRenderer = new CraneRenderer(mount);
   bindControls();
+  updatePIDSliderBounds(params.L, params.m);
   requestAnimationFrame(loop);
 }
 
@@ -451,14 +453,69 @@ function updateGraph() {
 }
 
 // ============================================================
+// PID SLIDER BOUNDS
+// ============================================================
+function updatePIDSliderBounds(L, m) {
+  const r = computePhysicsRanges(L, m);
+
+  const slKp = document.getElementById('sl-kp');
+  const slKd = document.getElementById('sl-kd');
+  const slKi = document.getElementById('sl-ki');
+
+  if (slKp) {
+    slKp.max  = r.Kp.max;
+    slKp.step = r.Kp.step;
+    if (parseFloat(slKp.value) > r.Kp.max) {
+      slKp.value = r.Kp.default;
+      const valEl = document.getElementById('val-kp');
+      if (valEl) valEl.textContent = r.Kp.default.toFixed(1);
+      params.Kp = r.Kp.default;
+      pidX.Kp = pidY.Kp = r.Kp.default;
+    }
+  }
+
+  if (slKd) {
+    slKd.max  = r.Kd.max;
+    slKd.step = r.Kd.step;
+    if (parseFloat(slKd.value) > r.Kd.max) {
+      slKd.value = r.Kd.default;
+      const valEl = document.getElementById('val-kd');
+      if (valEl) valEl.textContent = r.Kd.default.toFixed(1);
+      params.Kd = r.Kd.default;
+      pidX.Kd = pidY.Kd = r.Kd.default;
+    }
+  }
+
+  if (slKi) {
+    slKi.max = r.Ki.max;
+  }
+}
+
+window.addEventListener('pid-bounds-update', (e) => {
+  updatePIDSliderBounds(e.detail.L, e.detail.m);
+});
+
+// ============================================================
 // UI BINDING
 // ============================================================
 function bindControls() {
   // Sliders
   bindSlider('sl-wind-speed', 'val-wind-speed', v => { params.windSpeed = v; return v.toFixed(1) + ' m/s'; });
   bindSlider('sl-wind-dir',   'val-wind-dir',   v => { params.windDir = v;  return v.toFixed(0) + '°'; });
-  bindSlider('sl-rope',       'val-rope',       v => { params.L = v; pendulum.L = v; return v.toFixed(1) + ' m'; });
-  bindSlider('sl-mass',       'val-mass',       v => { params.m = v; pendulum.m = v; return v.toFixed(0) + ' kg'; });
+  document.getElementById('sl-rope')?.addEventListener('input', e => {
+    const v = parseFloat(e.target.value);
+    params.L = v;
+    pendulum.L = v;
+    document.getElementById('val-rope').textContent = v.toFixed(1) + ' m';
+    updatePIDSliderBounds(params.L, params.m);
+  });
+  document.getElementById('sl-mass')?.addEventListener('input', e => {
+    const v = parseFloat(e.target.value);
+    params.m = v;
+    pendulum.m = v;
+    document.getElementById('val-mass').textContent = v.toFixed(0) + ' kg';
+    updatePIDSliderBounds(params.L, params.m);
+  });
   bindSlider('sl-kp',         'val-kp',         v => { params.Kp = v; pidX.Kp = v; pidY.Kp = v; return v.toFixed(1); });
   bindSlider('sl-ki',         'val-ki',         v => { params.Ki = v; pidX.Ki = v; pidY.Ki = v; return v.toFixed(2); });
   bindSlider('sl-kd',         'val-kd',         v => { params.Kd = v; pidX.Kd = v; pidY.Kd = v; return v.toFixed(1); });

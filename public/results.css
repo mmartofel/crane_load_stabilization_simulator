@@ -631,3 +631,29 @@
   white-space: nowrap;
   display: none;
 }
+
+/* ---- PID form selects ---- */
+.pid-select {
+  width: 100%;
+  background: #0d1117;
+  border: 1px solid #2a3441;
+  color: #c8d4e0;
+  padding: 5px 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  border-radius: 3px;
+}
+.pid-select:focus { outline: none; border-color: #00d4aa; }
+
+/* ---- Physics info strip ---- */
+.pid-physics-info {
+  background: #0a2a2a;
+  border: 1px solid #004433;
+  border-radius: 3px;
+  padding: 5px 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #00d4aa;
+  line-height: 1.6;
+  margin-bottom: 8px;
+}

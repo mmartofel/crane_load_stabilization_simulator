@@ -3,7 +3,7 @@
 // ============================================================
 
 import { Pendulum } from './sim.js';
-import { TestScenario, computeScore, BatchOptimizer } from './optimizer.js';
+import { TestScenario, computeScore, BatchOptimizer, computePhysicsRanges } from './optimizer.js';
 
 // ---- State ----
 let allResults = [];
@@ -57,6 +57,18 @@ function initTabs() {
 // Apply to simulator
 // ============================================================
 function applyToSimulator(Kp, Ki, Kd) {
+  const L = getPidL(), m = getPidM();
+
+  // Sync simulator scenario (rope length + mass)
+  const slRope = document.getElementById('sl-rope');
+  const slMass = document.getElementById('sl-mass');
+  if (slRope) { slRope.value = L; slRope.dispatchEvent(new Event('input')); }
+  if (slMass) { slMass.value = m; slMass.dispatchEvent(new Event('input')); }
+
+  // Trigger bounds update in simulator
+  window.dispatchEvent(new CustomEvent('pid-bounds-update', { detail: { L, m } }));
+
+  // Set PID gains
   ['kp', 'ki', 'kd'].forEach((k, i) => {
     const slider = document.getElementById(`sl-${k}`);
     if (!slider) return;
@@ -83,24 +95,39 @@ function getRange(prefix) {
   return linspace(min, max, Math.max(1, Math.min(steps, 10)));
 }
 
-function getChecked(name) {
-  return [...document.querySelectorAll(`input[name="${name}"]:checked`)].map(el => parseFloat(el.value));
-}
-
-function getCheckedStr(name) {
-  return [...document.querySelectorAll(`input[name="${name}"]:checked`)].map(el => el.value);
-}
+function getPidL()    { return parseFloat(document.getElementById('pid-L').value); }
+function getPidM()    { return parseFloat(document.getElementById('pid-m').value); }
+function getPidDist() { return document.getElementById('pid-dist').value; }
 
 function updateTestCount() {
   const kpR = getRange('kp');
   const kiR = getRange('ki');
   const kdR = getRange('kd');
-  const Ls = getChecked('L');
-  const ms = getChecked('m');
-  const dists = getCheckedStr('dist');
-  const total = kpR.length * kiR.length * kdR.length * Math.max(Ls.length, 1) * Math.max(ms.length, 1) * Math.max(dists.length, 1);
+  const total = kpR.length * kiR.length * kdR.length;
   if (elTestCount) elTestCount.textContent = `${total} testów`;
   return total;
+}
+
+function setRangeInputs(prefix, range) {
+  const el = (id) => document.getElementById(`${prefix}-${id}`);
+  if (el('min'))  el('min').value  = range.min;
+  if (el('max'))  el('max').value  = range.max;
+  // leave 'steps' unchanged (user controls grid resolution)
+}
+
+function onScenarioChange() {
+  const L = getPidL(), m = getPidM();
+  const r = computePhysicsRanges(L, m);
+
+  setRangeInputs('kp', r.Kp);
+  setRangeInputs('kd', r.Kd);
+  setRangeInputs('ki', r.Ki);
+
+  document.getElementById('pi-T').textContent      = r.T;
+  document.getElementById('pi-Kpcrit').textContent = r.Kp_crit;
+  document.getElementById('pi-Kdmax').textContent  = r.Kd.max;
+
+  updateTestCount();
 }
 
 // ============================================================
@@ -110,15 +137,7 @@ async function runTests() {
   const kpR = getRange('kp');
   const kiR = getRange('ki');
   const kdR = getRange('kd');
-  const Ls = getChecked('L');
-  const ms = getChecked('m');
-  const dists = getCheckedStr('dist');
   const windSpeed = parseFloat(document.getElementById('pid-wind-speed')?.value ?? 8);
-
-  if (!Ls.length || !ms.length || !dists.length) {
-    alert('Wybierz przynajmniej jedną wartość L, m i typ zakłócenia.');
-    return;
-  }
 
   running = true;
   startTime = Date.now();
@@ -133,9 +152,9 @@ async function runTests() {
     Kp_range: kpR,
     Ki_range: kiR,
     Kd_range: kdR,
-    L_values: Ls,
-    m_values: ms,
-    disturbance_types: dists,
+    L_values: [getPidL()],
+    m_values: [getPidM()],
+    disturbance_types: [getPidDist()],
     wind_speed: windSpeed,
     onProgress: ({ done, total, result }) => {
       batchResults.push(result);
@@ -165,10 +184,7 @@ function stopTests() {
 }
 
 async function runZN() {
-  const Ls = getChecked('L');
-  const ms = getChecked('m');
   const windSpeed = parseFloat(document.getElementById('pid-wind-speed')?.value ?? 8);
-  if (!Ls.length || !ms.length) { alert('Wybierz L i m dla metody Z-N.'); return; }
 
   elZnBtn.disabled = true;
   elZnBtn.textContent = 'Obliczam...';
@@ -176,7 +192,7 @@ async function runZN() {
   try {
     const opt = new BatchOptimizer();
     const { Kp, Ki, Kd, Ku, Tu } = await opt.runZieglerNichols({
-      L: Ls[0], m: ms[0], wind_speed: windSpeed
+      L: getPidL(), m: getPidM(), wind_speed: windSpeed
     });
 
     const box = document.getElementById('zn-result');
@@ -845,9 +861,14 @@ function init() {
   document.querySelectorAll('.pid-range-input').forEach(el => {
     el.addEventListener('input', updateTestCount);
   });
-  document.querySelectorAll('input[name="L"], input[name="m"], input[name="dist"]').forEach(el => {
-    el.addEventListener('change', updateTestCount);
-  });
+
+  // Scenario selects → auto-fill ranges + physics info
+  document.getElementById('pid-L')?.addEventListener('change', onScenarioChange);
+  document.getElementById('pid-m')?.addEventListener('change', onScenarioChange);
+  document.getElementById('pid-dist')?.addEventListener('change', updateTestCount);
+
+  // Initialize ranges based on default L/m selection
+  onScenarioChange();
 
   // Buttons
   elRunBtn?.addEventListener('click', runTests);

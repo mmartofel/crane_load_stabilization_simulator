@@ -221,32 +221,40 @@
 
       <div class="form-group">
         <label>Długość liny L [m]</label>
-        <div class="checkbox-group">
-          <label><input type="checkbox" name="L" value="5"> 5</label>
-          <label><input type="checkbox" name="L" value="10" checked> 10</label>
-          <label><input type="checkbox" name="L" value="15"> 15</label>
-          <label><input type="checkbox" name="L" value="20"> 20</label>
-        </div>
+        <select id="pid-L" class="pid-select">
+          <option value="3">L = 3 m</option>
+          <option value="5">L = 5 m</option>
+          <option value="10" selected>L = 10 m</option>
+          <option value="15">L = 15 m</option>
+          <option value="20">L = 20 m</option>
+        </select>
       </div>
 
       <div class="form-group">
         <label>Masa ładunku m [kg]</label>
-        <div class="checkbox-group">
-          <label><input type="checkbox" name="m" value="50" checked> 50</label>
-          <label><input type="checkbox" name="m" value="100"> 100</label>
-          <label><input type="checkbox" name="m" value="200"> 200</label>
-          <label><input type="checkbox" name="m" value="500"> 500</label>
-        </div>
+        <select id="pid-m" class="pid-select">
+          <option value="10">m = 10 kg</option>
+          <option value="50" selected>m = 50 kg</option>
+          <option value="100">m = 100 kg</option>
+          <option value="200">m = 200 kg</option>
+          <option value="500">m = 500 kg</option>
+        </select>
       </div>
 
       <div class="form-group">
         <label>Typ zakłócenia</label>
-        <div class="checkbox-group">
-          <label><input type="checkbox" name="dist" value="step" checked> Skok</label>
-          <label><input type="checkbox" name="dist" value="impulse"> Impuls</label>
-          <label><input type="checkbox" name="dist" value="ramp"> Rampa</label>
-          <label><input type="checkbox" name="dist" value="gust"> Porywy</label>
-        </div>
+        <select id="pid-dist" class="pid-select">
+          <option value="step" selected>Skok (step)</option>
+          <option value="impulse">Impuls</option>
+          <option value="ramp">Rampa</option>
+          <option value="gust">Porywy wiatru</option>
+        </select>
+      </div>
+
+      <div id="pid-physics-info" class="pid-physics-info">
+        T=<span id="pi-T">—</span>s &nbsp;|&nbsp;
+        Kp_crit≈<span id="pi-Kpcrit">—</span> &nbsp;|&nbsp;
+        Kd_max≈<span id="pi-Kdmax">—</span>
       </div>
 
       <div class="form-group">

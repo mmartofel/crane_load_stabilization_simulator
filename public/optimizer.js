@@ -220,3 +220,26 @@ export class BatchOptimizer {
     return best;
   }
 }
+
+export function computePhysicsRanges(L, m) {
+  const g = 9.81;
+  const T = 2 * Math.PI * Math.sqrt(L / g);
+
+  const Kp_max  = +(m * 0.85).toFixed(1);
+  const Kp_min  = +(m * 0.04).toFixed(2);
+  const Kp_def  = +(m * 0.30).toFixed(1);
+  const Kp_step = Kp_max > 50 ? 1.0 : (Kp_max > 10 ? 0.5 : 0.1);
+
+  const Kd_max  = +(T * 1.4).toFixed(1);
+  const Kd_min  = +(T * 0.05).toFixed(2);
+  const Kd_def  = +(T * 0.7).toFixed(1);
+  const Kd_step = Kd_max > 5 ? 0.5 : 0.1;
+
+  return {
+    T: +T.toFixed(2),
+    Kp_crit: m,
+    Kp: { min: Kp_min, max: Kp_max, default: Kp_def, step: Kp_step },
+    Kd: { min: Kd_min, max: Kd_max, default: Kd_def, step: Kd_step },
+    Ki: { min: L < 5 ? 0 : 0.01, max: 0.40, default: 0.10, step: 0.01 },
+  };
+}
