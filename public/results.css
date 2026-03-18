@@ -668,3 +668,53 @@
   line-height: 1.6;
   margin-bottom: 8px;
 }
+
+/* ---- BUILD MODEL panel ---- */
+.ai-build-panel {
+  background: #0a1a2a;
+  border: 1px solid #004433;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+}
+
+.ai-build-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #00d4aa;
+  margin-bottom: 6px;
+}
+
+.ai-build-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #8b949e;
+  font-family: 'JetBrains Mono', monospace;
+  margin-bottom: 8px;
+}
+
+.model-success {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: #0a2a2a;
+  border: 1px solid #004433;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #c8d4e0;
+  font-family: 'JetBrains Mono', monospace;
+  line-height: 1.7;
+}
+
+.model-error {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: #2a0a0a;
+  border: 1px solid #440000;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #ff6666;
+  font-family: 'JetBrains Mono', monospace;
+}

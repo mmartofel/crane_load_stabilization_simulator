@@ -1,0 +1,75 @@
+# main.py — FastAPI AI service: /predict /train /status
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+from model import PIDPredictor
+import os, requests
+
+app = FastAPI(title="Crane PID AI Service")
+app.add_middleware(CORSMiddleware, allow_origins=["*"],
+                   allow_methods=["*"], allow_headers=["*"])
+predictor = PIDPredictor()
+
+class PredictRequest(BaseModel):
+    L:                      float = Field(..., ge=0.5, le=50)
+    m:                      float = Field(..., ge=0,   le=1000)
+    wind_speed:             float = Field(..., ge=0,   le=50)
+    wind_dir_deg:           float = Field(..., ge=0,   le=360)
+    theta_x:                float = Field(0.0)
+    theta_y:                float = Field(0.0)
+    use_ollama_explanation: bool  = Field(False)
+
+class TrainRequest(BaseModel):
+    csv_path: str = Field("../data/test_results.csv")
+
+@app.post("/predict")
+async def predict(req: PredictRequest):
+    result = predictor.predict(req.L, req.m, req.wind_speed, req.wind_dir_deg)
+    # Boost Kp when load is heavily deflected (|θ| > ~8°)
+    theta_mag = (req.theta_x**2 + req.theta_y**2)**0.5
+    if theta_mag > 0.14:
+        result['Kp']        = round(result['Kp'] * 1.2, 2)
+        result['adjustment'] = 'kp_boost_large_angle'
+    else:
+        result['adjustment'] = 'none'
+    # Optional Ollama explanation using mistral model
+    if req.use_ollama_explanation:
+        try:
+            resp = requests.post(
+                "http://localhost:11434/api/generate",
+                json={"model": "mistral", "stream": False,
+                      "prompt": (
+                          f"You are a PID expert. Briefly explain (2 sentences) why "
+                          f"for a crane with rope {req.L}m, load {req.m}kg, wind "
+                          f"{req.wind_speed}m/s the optimal settings are "
+                          f"Kp={result['Kp']}, Ki={result['Ki']}, Kd={result['Kd']}. "
+                          f"Answer in English, technical, no preamble.")},
+                timeout=8)
+            result['explanation'] = resp.json().get("response") or "Ollama: empty response"
+        except Exception:
+            result['explanation'] = "LLM server unavailable"
+    else:
+        result['explanation'] = None
+    return result
+
+@app.post("/train")
+async def train(req: TrainRequest):
+    if not os.path.exists(req.csv_path):
+        raise HTTPException(404, f"File not found: {req.csv_path}")
+    try:
+        stats = predictor.train(req.csv_path)
+        return {"status": "ok", "stats": stats}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+@app.get("/status")
+async def status():
+    return {
+        "trained":           predictor.is_trained,
+        "stats":             predictor.training_stats,
+        "model_file_exists": os.path.exists(predictor.MODEL_PATH)
+    }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

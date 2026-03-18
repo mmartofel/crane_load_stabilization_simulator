@@ -11,6 +11,8 @@ export class CraneRenderer {
     this._propellerAngle = [0, 0, 0, 0];
     this._trail = [];          // [{x, z}] — load trajectory
     this._MAX_TRAIL = 300;     // ~5s @ 60fps
+    this._yawOffset = 0;       // crane yaw in radians (animated by animateYaw)
+    this._yawAnimIv = null;    // interval handle for yaw animation
 
     this._init();
     this._buildScene();
@@ -240,9 +242,12 @@ export class CraneRenderer {
     const THREE = window.THREE;
     const { theta_x, theta_y } = state;
 
-    // ---- Load position ----
-    const px = Math.sin(theta_x) * L;
-    const pz = Math.sin(theta_y) * L;
+    // ---- Load position (rotated by crane yaw offset) ----
+    const rawX = Math.sin(theta_x) * L;
+    const rawZ = Math.sin(theta_y) * L;
+    const cosY = Math.cos(this._yawOffset), sinY = Math.sin(this._yawOffset);
+    const px = rawX * cosY - rawZ * sinY;
+    const pz = rawX * sinY + rawZ * cosY;
     const py = 22 - Math.cos(Math.sqrt(theta_x*theta_x + theta_y*theta_y)) * L;
 
     this._load.position.set(px, py, pz);
@@ -343,5 +348,45 @@ export class CraneRenderer {
   resetTrail() {
     this._trail = [];
     this._trailLine.geometry.setDrawRange(0, 0);
+  }
+
+  // Animate crane yaw (slewing) over durationMs milliseconds
+  animateYaw(yawDeltaDeg, durationMs) {
+    if (this._yawAnimIv) clearInterval(this._yawAnimIv);
+    const startYaw  = this._yawOffset;
+    const targetYaw = this._yawOffset + (yawDeltaDeg * Math.PI / 180);
+    const steps     = Math.max(1, Math.round(durationMs / 50));
+    let   step      = 0;
+    this._yawAnimIv = setInterval(() => {
+      step++;
+      const t = step / steps;
+      this._yawOffset = startYaw + (targetYaw - startYaw) * t;
+      // Visually rotate the mast mesh so the arm appears to slew
+      this._mastMesh.rotation.y = this._yawOffset;
+      if (step >= steps) {
+        clearInterval(this._yawAnimIv);
+        this._yawAnimIv = null;
+      }
+    }, 50);
+  }
+
+  // Show/hide/scale load based on mass (m≈2 = empty hook, larger = cargo)
+  setLoadVisible(visible, mass = 50) {
+    if (!visible || mass <= 3) {
+      // Empty hook — tiny grey sphere
+      this._load.scale.setScalar(0.3);
+      this._loadMesh.material.color.setHex(0x556677);
+      this._loadMesh.material.emissive?.setHex(0x000000);
+    } else {
+      // Scale proportional to cube root of mass ratio vs 50 kg baseline
+      const scale = Math.max(0.55, Math.min(1.6, Math.pow(mass / 50, 0.33)));
+      this._load.scale.setScalar(scale);
+      // Heavier loads are darker / more saturated
+      const darkness = Math.min(0.4, (mass - 50) / 400);
+      const r = Math.round(0xff * (1 - darkness));
+      const g = Math.round(0x6b * (1 - darkness));
+      const b = Math.round(0x35 * (1 - darkness * 0.5));
+      this._loadMesh.material.color.setRGB(r / 255, g / 255, b / 255);
+    }
   }
 }
