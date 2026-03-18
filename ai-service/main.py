@@ -44,7 +44,7 @@ async def predict(req: PredictRequest):
                           f"{req.wind_speed}m/s the optimal settings are "
                           f"Kp={result['Kp']}, Ki={result['Ki']}, Kd={result['Kd']}. "
                           f"Answer in English, technical, no preamble.")},
-                timeout=8)
+                timeout=180)  # Increased timeout to 180 seconds
             result['explanation'] = resp.json().get("response") or "Ollama: empty response"
         except Exception:
             result['explanation'] = "LLM server unavailable"
