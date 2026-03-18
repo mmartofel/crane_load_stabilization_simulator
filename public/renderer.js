@@ -10,7 +10,7 @@ export class CraneRenderer {
 
     this._propellerAngle = [0, 0, 0, 0];
     this._trail = [];          // [{x, z}] — load trajectory
-    this._MAX_TRAIL = 300;     // ~5s @ 60fps
+    this._MAX_TRAIL = 1800;    // ~30s @ 60fps
     this._yawOffset = 0;       // crane yaw in radians (animated by animateYaw)
     this._yawAnimIv = null;    // interval handle for yaw animation
 
@@ -90,14 +90,20 @@ export class CraneRenderer {
     scene.add(ground);
     this._groundMesh = ground;
 
-    // ---- Crane mast ----
-    const mastGeo = new THREE.CylinderGeometry(0.18, 0.22, 22, 8);
-    const mastMat = new THREE.MeshLambertMaterial({ color: 0x4a6a8a });
-    const mast = new THREE.Mesh(mastGeo, mastMat);
-    mast.position.set(0, 11, 0);
-    mast.castShadow = true;
-    scene.add(mast);
-    this._mastMesh = mast;
+    // ---- Crane mast (thin dashed red reference line) ----
+    const mastGeo = new THREE.BufferGeometry();
+    const mastPoints = new Float32Array([0, 0, 0,  0, 22, 0]);
+    mastGeo.setAttribute('position', new THREE.BufferAttribute(mastPoints, 3));
+    const mastMat = new THREE.LineDashedMaterial({
+      color: 0xff2222,
+      linewidth: 1,
+      dashSize: 0.5,
+      gapSize: 0.35,
+    });
+    const mastLine = new THREE.Line(mastGeo, mastMat);
+    mastLine.computeLineDistances(); // required for LineDashedMaterial
+    scene.add(mastLine);
+    this._mastMesh = mastLine;
 
     // ---- Suspension point ----
     const suspGeo = new THREE.SphereGeometry(0.3, 16, 8);
@@ -107,14 +113,14 @@ export class CraneRenderer {
     scene.add(suspPoint);
     this._suspPoint = suspPoint;
 
-    // ---- Rope (dynamic — updated each frame) ----
-    const ropeMat = new THREE.LineBasicMaterial({ color: 0x90c0e0, linewidth: 2 });
+    // ---- Rope (3D cylinder mesh for visible thickness) ----
+    const ropeGeo = new THREE.CylinderGeometry(0.06, 0.06, 1, 8);
+    ropeGeo.translate(0, 0.5, 0); // shift so Y=0 is the base (not center)
+    const ropeMat = new THREE.MeshLambertMaterial({ color: 0x90c0e0 });
     this._ropeMaterial = ropeMat;
-    const ropeGeo = new THREE.BufferGeometry();
-    const ropePoints = new Float32Array(6); // 2 points x 3 coords
-    ropeGeo.setAttribute('position', new THREE.BufferAttribute(ropePoints, 3));
-    this._rope = new THREE.Line(ropeGeo, ropeMat);
-    scene.add(this._rope);
+    const ropeMesh = new THREE.Mesh(ropeGeo, ropeMat);
+    scene.add(ropeMesh);
+    this._rope = ropeMesh;
 
     // ---- Load (cargo ball) ----
     const loadGeo = new THREE.SphereGeometry(0.55, 24, 16);
@@ -216,7 +222,7 @@ export class CraneRenderer {
     scene.add(this._windArrow);
 
     // ---- Trail line ----
-    const trailMat = new THREE.LineBasicMaterial({ color: 0x00d4aa, opacity: 0.7, transparent: true, vertexColors: false });
+    const trailMat = new THREE.LineBasicMaterial({ color: 0x00d4aa, linewidth: 3, opacity: 1.0, transparent: false, vertexColors: false });
     this._trailMaterial = trailMat;
     const trailGeo = new THREE.BufferGeometry();
     const trailBuf = new Float32Array(this._MAX_TRAIL * 3);
@@ -252,11 +258,18 @@ export class CraneRenderer {
 
     this._load.position.set(px, py, pz);
 
-    // ---- Rope ----
-    const ropePos = this._rope.geometry.attributes.position;
-    ropePos.setXYZ(0, 0, 22, 0);
-    ropePos.setXYZ(1, px, py, pz);
-    ropePos.needsUpdate = true;
+    // ---- Rope: orient cylinder from suspension point to load ----
+    const suspPt = new THREE.Vector3(0, 22, 0);
+    const loadPt = new THREE.Vector3(px, py, pz);
+    const ropeDir = loadPt.clone().sub(suspPt);
+    const ropeDist = ropeDir.length();
+    this._rope.position.copy(suspPt);
+    this._rope.scale.set(1, ropeDist, 1);
+    const ropeQuat = new THREE.Quaternion().setFromUnitVectors(
+      new THREE.Vector3(0, 1, 0),
+      ropeDir.normalize()
+    );
+    this._rope.quaternion.copy(ropeQuat);
 
     // ---- Propeller frame (mid-rope) ----
     const mx = px * 0.5;
@@ -333,7 +346,6 @@ export class CraneRenderer {
     const bg   = isDark ? 0x141e2e : 0xdde8f0;
     const load = isDark ? 0xff6b35 : 0xee4422;
     const rope = isDark ? 0x90c0e0 : 0x334455;
-    const mast = isDark ? 0x4a6a8a : 0x445566;
     const gnd  = isDark ? 0x0f1a24 : 0xb0c8d8;
 
     this._renderer.setClearColor(bg);
@@ -341,7 +353,7 @@ export class CraneRenderer {
     this.scene.fog.color.setHex(bg);
     this._loadMesh.material.color.setHex(load);
     this._ropeMaterial.color.setHex(rope);
-    this._mastMesh.material.color.setHex(mast);
+    // mast is a fixed red reference line — color is not theme-dependent
     this._groundMesh.material.color.setHex(gnd);
   }
 

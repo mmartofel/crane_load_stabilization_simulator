@@ -852,10 +852,17 @@ function initAITab() {
     thetaHistory.length = 0;
     const banner = document.getElementById('ai-finish-banner');
     if (banner) banner.style.display = 'none';
-    // Reset renderer trail and yaw
+    // Reset renderer trail, yaw, and snap load back to vertical
     if (aiRenderer) {
       aiRenderer.resetTrail();
       aiRenderer._yawOffset = 0;
+      aiRenderer.update(
+        aiController.pendulum.state,
+        [0, 0, 0, 0],
+        aiController.conditions.wind_speed,
+        aiController.conditions.wind_dir,
+        aiController.conditions.L
+      );
     }
     updateConditionsUI(aiController.conditions);
     updateCurrentParamsUI(aiController.params, aiController.params);
