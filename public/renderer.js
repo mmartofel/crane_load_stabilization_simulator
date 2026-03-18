@@ -230,6 +230,43 @@ export class CraneRenderer {
     trailGeo.setDrawRange(0, 0);
     this._trailLine = new THREE.Line(trailGeo, trailMat);
     scene.add(this._trailLine);
+
+    // ---- Propeller labels M1–M4 (children of propFrame so they follow it) ----
+    const propLabelColors = ['#00d4aa', '#4da6ff', '#00d4aa', '#4da6ff'];
+    // Position each label slightly above (+0.55 in local Y) the propeller disc
+    const propLabelPos = [
+      [0, 0.55, -1.2],   // M1 N
+      [1.2, 0.55, 0],    // M2 E
+      [0, 0.55, 1.2],    // M3 S
+      [-1.2, 0.55, 0],   // M4 W
+    ];
+    this._propLabelSprites = [];
+    ['M1', 'M2', 'M3', 'M4'].forEach((name, i) => {
+      const pl = this._makeTextSprite(64, 30);
+      pl.ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      pl.ctx.fillRect(1, 1, 62, 28);
+      pl.ctx.font = 'bold 16px monospace';
+      pl.ctx.textAlign = 'center';
+      pl.ctx.fillStyle = propLabelColors[i];
+      pl.ctx.fillText(name, 32, 21);
+      pl.texture.needsUpdate = true;
+      pl.sprite.position.set(...propLabelPos[i]);
+      pl.sprite.scale.set(0.9, 0.42, 1);
+      this._propFrame.add(pl.sprite);
+      this._propLabelSprites.push(pl.sprite);
+    });
+
+    // ---- Load info label (mass + L), positioned in world space and updated each frame ----
+    const loadLbl = this._makeTextSprite(160, 46);
+    this._loadLabel = loadLbl;
+    loadLbl.sprite.scale.set(2.0, 0.58, 1);
+    scene.add(loadLbl.sprite);
+
+    // ---- Wind info label (speed, direction, force components), updated each frame ----
+    const windLbl = this._makeTextSprite(192, 64);
+    this._windLabel = windLbl;
+    windLbl.sprite.scale.set(2.6, 0.87, 1);
+    scene.add(windLbl.sprite);
   }
 
   _setupResize() {
@@ -242,6 +279,19 @@ export class CraneRenderer {
       this.camera.updateProjectionMatrix();
     });
     ro.observe(this._mount);
+  }
+
+  // Create a canvas-texture sprite for text labels
+  _makeTextSprite(w, h) {
+    const THREE = window.THREE;
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    const texture = new THREE.CanvasTexture(canvas);
+    const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+    const sprite = new THREE.Sprite(mat);
+    return { sprite, canvas, ctx, texture };
   }
 
   update(state, pwm, windSpeed, windDir, L) {
@@ -325,6 +375,31 @@ export class CraneRenderer {
     this._windArrow.setLength(wLen, Math.min(0.6, wLen * 0.3), Math.min(0.35, wLen * 0.2));
     this._windArrow.visible = windSpeed > 0.1;
 
+    // ---- Wind info label ----
+    if (this._windLabel) {
+      const wl = this._windLabel;
+      const wCtx = wl.ctx, wW = wl.canvas.width, wH = wl.canvas.height;
+      wCtx.clearRect(0, 0, wW, wH);
+      wCtx.fillStyle = 'rgba(0,0,0,0.62)';
+      wCtx.fillRect(2, 2, wW - 4, wH - 4);
+      wCtx.textAlign = 'center';
+      const wcx = wW / 2;
+      wCtx.font = 'bold 12px monospace';
+      wCtx.fillStyle = '#4da6ff';
+      wCtx.fillText('WIND', wcx, 16);
+      wCtx.font = '11px monospace';
+      wCtx.fillStyle = 'rgba(255,255,255,0.9)';
+      wCtx.fillText(`${windSpeed.toFixed(1)} m/s   ${windDir.toFixed(0)}\u00b0`, wcx, 31);
+      const Fx = +(windSpeed * Math.sin(wRad)).toFixed(1);
+      const Fz = +(windSpeed * Math.cos(wRad)).toFixed(1);
+      wCtx.fillStyle = 'rgba(255,255,255,0.65)';
+      wCtx.font = '10px monospace';
+      wCtx.fillText(`Fx:${Fx >= 0 ? '+' : ''}${Fx}  Fz:${Fz >= 0 ? '+' : ''}${Fz}`, wcx, 46);
+      wl.texture.needsUpdate = true;
+      wl.sprite.position.set(-3, 10.5, 0);
+      wl.sprite.visible = windSpeed > 0.1;
+    }
+
     // ---- Trail ----
     this._trail.push({ x: px, y: py, z: pz });
     if (this._trail.length > this._MAX_TRAIL) this._trail.shift();
@@ -335,6 +410,24 @@ export class CraneRenderer {
     });
     trailPos.needsUpdate = true;
     this._trailLine.geometry.setDrawRange(0, this._trail.length);
+
+    // ---- Load info label ----
+    if (this._loadLabel) {
+      const ll = this._loadLabel;
+      const lCtx = ll.ctx, lW = ll.canvas.width, lH = ll.canvas.height;
+      lCtx.clearRect(0, 0, lW, lH);
+      lCtx.fillStyle = 'rgba(0,0,0,0.62)';
+      lCtx.fillRect(2, 2, lW - 4, lH - 4);
+      lCtx.textAlign = 'center';
+      const lcx = lW / 2;
+      lCtx.font = 'bold 13px monospace';
+      lCtx.fillStyle = '#ff9d00';
+      lCtx.fillText(`m: ${Math.round(this._loadMass || 50)} kg`, lcx, 17);
+      lCtx.fillStyle = '#90c0e0';
+      lCtx.fillText(`L: ${L.toFixed(1)} m`, lcx, 34);
+      ll.texture.needsUpdate = true;
+      ll.sprite.position.set(px + 0.9, py + 0.9, pz);
+    }
 
     // Controls + render
     this.controls.update();
@@ -384,6 +477,7 @@ export class CraneRenderer {
 
   // Show/hide/scale load based on mass (m≈2 = empty hook, larger = cargo)
   setLoadVisible(visible, mass = 50) {
+    this._loadMass = mass;
     if (!visible || mass <= 3) {
       // Empty hook — tiny grey sphere
       this._load.scale.setScalar(0.3);
