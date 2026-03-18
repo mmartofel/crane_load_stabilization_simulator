@@ -42,8 +42,6 @@ class PIDPredictor:
     def train(self, csv_path: str) -> dict:
         df = pd.read_csv(csv_path)
         df = df[df['status'] == 'ok']
-        threshold = df['score'].quantile(0.30)
-        df = df[df['score'] <= threshold]
         if len(df) < 10:
             raise ValueError(f"Too few rows after filtering: {len(df)} rows.")
         df  = self._features(df)
@@ -70,7 +68,7 @@ class PIDPredictor:
             self.models[target] = pipe
         self.training_stats = {
             'n_total':         int(len(df)),
-            'score_threshold': round(float(threshold), 4),
+            'score_threshold': None,
             'metrics':         stats,
             'trained_at':      datetime.utcnow().isoformat() + 'Z'
         }

@@ -21,7 +21,7 @@ app.post('/api/ai/predict', async (req, res) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req.body),
-      signal: AbortSignal.timeout(5000)
+      signal: AbortSignal.timeout(req.body?.use_ollama_explanation ? 20000 : 5000)
     });
     res.json(await r.json());
   } catch {

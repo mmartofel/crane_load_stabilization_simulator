@@ -9,7 +9,8 @@ window.AI_SCENARIO = {
   ],
   events: [
     // ── CYCLE 1 ──────────────────────────────────────────────────────────
-    { t: 0,   type: 'set',    params: { L: 12, m: 50,  wind_speed: 4,  wind_dir: 60  }, label: 'Attach 50 kg, full rope' },
+    { t: 0,   type: 'set',    params: { L: 12, m: 50,  wind_speed: 8,  wind_dir: 60  }, label: 'Attach 50 kg, full rope' },
+    { t: 5,   type: 'gust',   params: { multiplier: 2.5, duration: 3 },                 label: 'Initial disturbance' },
     { t: 10,  type: 'ramp',   params: { L: 4 },          duration: 25,                  label: 'Hoist L: 12→4 m' },
     { t: 30,  type: 'gust',   params: { multiplier: 2.0, duration: 3 },                 label: 'Gust ×2 during hoisting' },
     { t: 40,  type: 'rotate', params: { yaw_delta: 120 }, duration: 15,                 label: 'Tower rotation +120°' },

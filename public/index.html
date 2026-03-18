@@ -494,10 +494,14 @@
         <div id="ai-phase-indicator" style="margin-top:6px;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600;background:#1D9E75;color:#fff;display:inline-block">Cycle 1</div>
       </div>
 
-      <div class="ai-btn-row">
-        <button id="ai-btn-play" class="btn btn-primary" data-state="paused">▶ START</button>
-        <button id="ai-btn-reset" class="btn btn-secondary">↺ RESET</button>
-        <button id="ai-btn-ollama" class="btn btn-toggle" data-active="false">OLLAMA: OFF</button>
+      <div class="control-group">
+        <h3>CONTROLS</h3>
+        <div class="btn-grid">
+          <button id="ai-btn-play" class="btn btn-primary btn-wide" data-state="paused">▶ START</button>
+          <button id="ai-btn-reset" class="btn btn-secondary">↺ RESET</button>
+          <button id="ai-btn-pid" class="btn btn-toggle" data-active="true">STABILIZER: ON</button>
+          <button id="ai-btn-ollama" class="btn btn-toggle btn-wide" data-active="false">OLLAMA: OFF</button>
+        </div>
       </div>
     </div>
 
@@ -532,6 +536,28 @@
           </div>
         </div>
         <canvas id="ai-telemetry-canvas" width="240" height="120" style="width:100%"></canvas>
+        <div class="telem-motors" style="margin-top:6px">
+          <div class="motor-row">
+            <span class="motor-label">M1 (N)</span>
+            <div class="motor-bar-wrap"><div class="motor-bar" id="ai-m1-bar"></div></div>
+            <span class="motor-val" id="ai-m1-val">0%</span>
+          </div>
+          <div class="motor-row">
+            <span class="motor-label">M2 (E)</span>
+            <div class="motor-bar-wrap"><div class="motor-bar" id="ai-m2-bar"></div></div>
+            <span class="motor-val" id="ai-m2-val">0%</span>
+          </div>
+          <div class="motor-row">
+            <span class="motor-label">M3 (S)</span>
+            <div class="motor-bar-wrap"><div class="motor-bar" id="ai-m3-bar"></div></div>
+            <span class="motor-val" id="ai-m3-val">0%</span>
+          </div>
+          <div class="motor-row">
+            <span class="motor-label">M4 (W)</span>
+            <div class="motor-bar-wrap"><div class="motor-bar" id="ai-m4-bar"></div></div>
+            <span class="motor-val" id="ai-m4-val">0%</span>
+          </div>
+        </div>
       </div>
 
       <div class="ai-section">
@@ -579,7 +605,8 @@
         <div class="rep-empty">Loading...</div>
       </div>
       <div class="rep-compare-panel">
-        <button id="rep-btn-compare" class="pid-btn pid-btn-secondary" disabled style="width:100%">Compare selected (0)</button>
+        <button id="rep-btn-compare" class="btn btn-primary" disabled style="width:100%;margin-bottom:6px">Compare selected (0)</button>
+        <button id="rep-btn-delete" class="btn btn-warning" disabled style="width:100%">Delete selected (0)</button>
       </div>
     </div>
 
@@ -588,9 +615,9 @@
       <div class="rep-main-header">
         <span class="rep-main-title" id="rep-session-title">Select a session</span>
         <div class="rep-action-row">
-          <button id="rep-btn-back" class="pid-btn pid-btn-secondary" style="display:none">← Back</button>
-          <button id="rep-export-csv" class="pid-btn pid-btn-secondary">↓ CSV</button>
-          <button id="rep-export-json" class="pid-btn pid-btn-secondary">↓ JSON</button>
+          <button id="rep-btn-back" class="btn btn-secondary" style="display:none">← Back</button>
+          <button id="rep-export-csv" class="btn btn-secondary">↓ CSV</button>
+          <button id="rep-export-json" class="btn btn-secondary">↓ JSON</button>
         </div>
       </div>
 
@@ -651,7 +678,7 @@
           </div>
         </div>
         <div style="margin-top:8px">
-          <button id="rep-btn-back-compare" class="pid-btn pid-btn-secondary">← Back to session</button>
+          <button id="rep-btn-back-compare" class="btn btn-secondary">← Back to session</button>
         </div>
       </div>
     </div>

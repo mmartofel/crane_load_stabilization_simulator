@@ -9,7 +9,7 @@ def main():
     p = PIDPredictor()
     try:
         stats = p.train(csv_path)
-        print(f"\nTraining complete — {stats['n_total']} rows used (top 30%)")
+        print(f"\nTraining complete — {stats['n_total']} rows used")
         print(f"Score threshold: {stats['score_threshold']:.4f}")
         print(f"Trained at: {stats['trained_at']}\n")
         for param, m in stats['metrics'].items():

@@ -45,7 +45,7 @@ async def predict(req: PredictRequest):
                           f"Kp={result['Kp']}, Ki={result['Ki']}, Kd={result['Kd']}. "
                           f"Answer in English, technical, no preamble.")},
                 timeout=8)
-            result['explanation'] = resp.json().get("response", "")
+            result['explanation'] = resp.json().get("response") or "Ollama: empty response"
         except Exception:
             result['explanation'] = "LLM server unavailable"
     else:

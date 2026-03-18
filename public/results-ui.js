@@ -1224,7 +1224,7 @@ function updateModelPanel(stats) {
   el.innerHTML = `<div class="model-success">
     <span style="color:#00d4aa">● Model ready</span> &nbsp;|&nbsp;
     Kp R²=${m.Kp?.r2 ?? '—'} &nbsp; Ki R²=${m.Ki?.r2 ?? '—'} &nbsp; Kd R²=${m.Kd?.r2 ?? '—'}<br>
-    ${stats.n_total ?? '—'} rows used (top 30%)
+    ${stats.n_total ?? '—'} rows used
     &nbsp; Trained: ${at}
   </div>`;
   const dateEl = document.getElementById('bm-model-date');

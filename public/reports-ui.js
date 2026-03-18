@@ -47,7 +47,7 @@ class ReportsUI {
           <span class="rep-session-date">${date}</span>
         </div>
         <div class="rep-session-meta">Avg θ: ${avg}°  Max θ: ${max}°  Updates: ${upd}</div>
-        <button class="rep-btn-view pid-btn pid-btn-primary" data-id="${s.session_id}">View report</button>
+        <button class="rep-btn-view btn btn-primary" data-id="${s.session_id}">View report</button>
       </div>`;
     }).join('');
 
@@ -69,6 +69,39 @@ class ReportsUI {
     if (!btn) return;
     btn.disabled = this.selectedForComparison.size < 2;
     btn.textContent = `Compare selected (${this.selectedForComparison.size})`;
+    this._updateDeleteBtn();
+  }
+
+  _updateDeleteBtn() {
+    const btn = document.getElementById('rep-btn-delete');
+    if (!btn) return;
+    btn.disabled = this.selectedForComparison.size === 0;
+    btn.textContent = `Delete selected (${this.selectedForComparison.size})`;
+  }
+
+  async deleteSelected() {
+    if (this.selectedForComparison.size === 0) return;
+    const ids = [...this.selectedForComparison];
+    const confirmed = confirm(`Delete ${ids.length} session(s)? This cannot be undone.`);
+    if (!confirmed) return;
+    await Promise.all(ids.map(id =>
+      fetch(`/api/sessions/${id}`, { method: 'DELETE' }).catch(() => {})
+    ));
+    const activeWasDeleted = ids.includes(this.activeSessionId);
+    // Remove deleted sessions from local state
+    this.sessions = this.sessions.filter(s => !this.selectedForComparison.has(s.session_id));
+    this.selectedForComparison.clear();
+    if (activeWasDeleted) this.activeSessionId = null;
+    this.renderSessionList();
+    this._updateCompareBtn();
+    // If active session was deleted, show first remaining or empty state
+    if (activeWasDeleted) {
+      if (this.sessions.length > 0) {
+        this.showSession(this.sessions[0].session_id); // restores DOM and shows first remaining
+      } else {
+        this._showEmpty(); // only when truly nothing left
+      }
+    }
   }
 
   showSession(sessionId) {
@@ -84,10 +117,13 @@ class ReportsUI {
     if (compare) compare.style.display = 'none';
 
     this.renderSummaryCards(session);
-    this.renderThetaChart(session);
-    this.renderParamsChart(session);
     this.renderPhaseTable(session);
     this.renderDecisionTable(session);
+    // Defer canvas renders so layout is complete before reading offsetWidth
+    requestAnimationFrame(() => {
+      this.renderThetaChart(session);
+      this.renderParamsChart(session);
+    });
 
     // Session title
     const titleEl = document.getElementById('rep-session-title');
@@ -387,11 +423,24 @@ class ReportsUI {
     ctx.fillRect(0, 0, W, H);
 
     const colors = ['#00d4aa', '#f0a830', '#e05555', '#7b9fe0'];
-    const pad    = { l: 12, r: 12, t: 24, b: 24 };
+    const pad    = { l: 36, r: 12, t: 24, b: 24 };
     const iW     = W - pad.l - pad.r;
     const iH     = H - pad.t - pad.b;
     const barW   = Math.min(80, iW / sessions.length - 12);
-    const maxAvg = Math.max(...sessions.map(s => s.metrics?.avg_theta_deg || 0), 5);
+    const maxAvg = Math.max(...sessions.map(s => s.metrics?.avg_theta_deg || 0), 0.1) * 1.15;
+
+    // Y-axis grid lines and labels
+    [0, 0.5, 1].forEach(frac => {
+      const yVal = maxAvg * frac;
+      const y    = pad.t + iH * (1 - frac);
+      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+      ctx.fillStyle = '#8b949e';
+      ctx.font = '8px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(`${yVal.toFixed(1)}°`, pad.l - 3, y + 3);
+    });
 
     sessions.forEach((s, i) => {
       const avg  = s.metrics?.avg_theta_deg || 0;
@@ -466,6 +515,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('rep-btn-compare')?.addEventListener('click', () => {
     reportsUI.showComparison();
     document.getElementById('rep-btn-back')?.style && (document.getElementById('rep-btn-back').style.display = '');
+  });
+  document.getElementById('rep-btn-delete')?.addEventListener('click', () => {
+    reportsUI.deleteSelected();
   });
   document.getElementById('rep-btn-back')?.addEventListener('click', () => {
     if (reportsUI.activeSessionId) reportsUI.showSession(reportsUI.activeSessionId);

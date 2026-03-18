@@ -23,6 +23,7 @@ class AIController {
     this.scenarioTime = 0;
     this.isRunning   = false;
     this.firedEvents = new Set();
+    this.pidEnabled  = true;
 
     this._smoothIv   = null;   // interval for smooth PID transition
     this._lastTsRecord = 0;    // last time a timeseries point was recorded
@@ -54,12 +55,16 @@ class AIController {
     this._lastTsRecord = 0;
     this.metrics     = { sumTheta: 0, maxTheta: 0, frames: 0, perPhase: {} };
 
+    this.pidEnabled  = true;
     this.pendulum = new Pendulum({ L: this.conditions.L, m: this.conditions.m });
     this.pidX     = new PIDController({ Kp: this.params.Kp, Ki: this.params.Ki, Kd: this.params.Kd });
     this.pidY     = new PIDController({ Kp: this.params.Kp, Ki: this.params.Ki, Kd: this.params.Kd });
     this.mixer    = new PropellerMixer();
 
     if (this._smoothIv) { clearInterval(this._smoothIv); this._smoothIv = null; }
+    // Reset stabilizer button state
+    const pidBtn = document.getElementById('ai-btn-pid');
+    if (pidBtn) { pidBtn.dataset.active = 'true'; pidBtn.textContent = 'STABILIZER: ON'; }
 
     if (this.renderer) this.renderer.resetTrail();
     updateDecisionHistoryUI([]);
@@ -79,9 +84,15 @@ class AIController {
           theta_y: this.pendulum.state.theta_y,
           use_ollama_explanation: this.useOllama
         }),
-        signal: AbortSignal.timeout(3000)
+        signal: AbortSignal.timeout(this.useOllama ? 15000 : 3000)
       });
-      return await resp.json();
+      const data = await resp.json();
+      console.log('[AI] predict response:', {
+        model: data.model, fallback: data.fallback,
+        hasExplanation: !!data.explanation,
+        explanation: typeof data.explanation === 'string' ? data.explanation.slice(0, 80) : data.explanation
+      });
+      return data;
     } catch {
       // Local analytical fallback
       const g = 9.81, T = 2 * Math.PI / Math.sqrt(g / Math.max(L, 0.1));
@@ -129,7 +140,17 @@ class AIController {
     if (this.history.length > 50) this.history.shift();
     updateDecisionHistoryUI(this.history);
     updateCurrentParamsUI(this.params, this.prevParams);
-    if (result.explanation) updateOllamaPanel(result.explanation);
+    console.log('[AI] applyParams — explanation:', result.explanation,
+                '| useOllama:', this.useOllama, '| fallback:', result.fallback);
+    if (this.useOllama) {
+      if (result.explanation) {
+        updateOllamaPanel(result.explanation);
+      } else if (result.fallback) {
+        updateOllamaPanel('⚠ AI service offline — analytical fallback');
+      } else {
+        updateOllamaPanel('⚠ Ollama: no response received');
+      }
+    }
     updateModelStatus(result.model || 'fallback', result.confidence || 0);
   }
 
@@ -186,17 +207,24 @@ class AIController {
     const F_wind_x = this.conditions.wind_speed * Math.sin(windRad);
     const F_wind_y = this.conditions.wind_speed * Math.cos(windRad);
 
-    // PID — same pattern as ui.js
-    const pidFx = this.pidX.compute(this.pendulum.state.theta_x, dt);
-    const pidFy = this.pidY.compute(this.pendulum.state.theta_y, dt);
-    this.mixer.mix(pidFx, pidFy, 0);
-    const forceScale = 1.0 / this.mixer.scale;
-    const pwmForce  = this.mixer.getForce(0);
-    const F_prop_x  = pwmForce.Fx * forceScale;
-    const F_prop_y  = pwmForce.Fy * forceScale;
-    const pwm       = this.mixer.pwm;
+    // PID — same pattern as ui.js; zero forces when stabilizer disabled
+    let F_prop_x = 0, F_prop_y = 0;
+    let pwm = [0, 0, 0, 0];
+    if (this.pidEnabled) {
+      const pidFx = this.pidX.compute(this.pendulum.state.theta_x, dt);
+      const pidFy = this.pidY.compute(this.pendulum.state.theta_y, dt);
+      this.mixer.mix(pidFx, pidFy, 0);
+      const forceScale = 1.0 / this.mixer.scale;
+      const pwmForce  = this.mixer.getForce(0);
+      F_prop_x  = pwmForce.Fx * forceScale;
+      F_prop_y  = pwmForce.Fy * forceScale;
+      pwm       = this.mixer.pwm;
+    }
 
     this.pendulum.step(dt, F_wind_x, F_wind_y, F_prop_x, F_prop_y);
+
+    // Update motor bars
+    updateMotorBars(pwm);
 
     // Record timeseries every second
     if (this.scenarioTime - this._lastTsRecord >= 1.0) {
@@ -282,7 +310,9 @@ class AIController {
 
   _onScenarioEnd() {
     this.isRunning = false;
+    stopAILoop();
     updatePlayBtn(false);
+    document.getElementById('ai-btn-play')?.classList.remove('running');
     const data = this._buildSessionData();
     this._saveSession(data);
     showFinishBanner(data);
@@ -454,7 +484,7 @@ function updateDecisionHistoryUI(history) {
     el.innerHTML = '<div class="ai-hist-empty">No decisions yet</div>';
     return;
   }
-  const items = [...history].reverse().slice(0, 50).map(h => {
+  const items = [...history].reverse().slice(0, 3).map(h => {
     const t = formatTime(h.t);
     const delta = `Kp ${h.prevKp?.toFixed(2) ?? '—'}→${h.Kp.toFixed(2)}`;
     const icon  = h.forced ? '⚡' : h.fallback ? '⚠' : '→';
@@ -479,6 +509,20 @@ function updateMetricsUI(metrics) {
   if (el('ai-metric-updates')) el('ai-metric-updates').textContent = aiController.history.length;
 }
 
+function updateMotorBars(pwm) {
+  const labels = ['m1', 'm2', 'm3', 'm4'];
+  pwm.forEach((val, i) => {
+    const barEl = document.getElementById(`ai-${labels[i]}-bar`);
+    const valEl = document.getElementById(`ai-${labels[i]}-val`);
+    const pct   = Math.round(Math.abs(val) * 100);
+    if (barEl) {
+      barEl.style.width      = Math.min(100, pct) + '%';
+      barEl.style.background = val >= 0 ? 'var(--accent)' : '#ff9d00';
+    }
+    if (valEl) valEl.textContent = `${val >= 0 ? '' : '-'}${pct}%`;
+  });
+}
+
 function updateTelemetryNumbers() {
   const state = aiController.pendulum.state;
   const theta = Math.hypot(state.theta_x, state.theta_y) * 180 / Math.PI;
@@ -492,6 +536,8 @@ function updateTelemetryNumbers() {
 function updateScenarioTimeUI(t) {
   const el = document.getElementById('ai-scenario-time');
   if (el) el.textContent = `${formatTime(t)} / 6:00`;
+  const headerEl = document.getElementById('ai-scenario-time-header');
+  if (headerEl) headerEl.textContent = `${formatTime(t)} / 6:00`;
 
   // Timeline progress bar
   const bar = document.getElementById('ai-timeline-progress');
@@ -534,6 +580,7 @@ function updateScenarioPhaseBanner(t) {
 }
 
 function updateOllamaPanel(text) {
+  console.log('[AI] updateOllamaPanel:', text?.slice?.(0, 60));
   const el = document.getElementById('ai-ollama-text');
   if (el) el.textContent = text || '—';
 }
@@ -572,65 +619,141 @@ function showFinishBanner(data) {
 // Canvas: Top-Down View
 // ============================================================
 
+function drawArrow2D(ctx, ox, oy, dx, dy, len, color, lw) {
+  const ex = ox + dx * len;
+  const ey = oy + dy * len;
+  ctx.beginPath();
+  ctx.moveTo(ox, oy);
+  ctx.lineTo(ex, ey);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lw;
+  ctx.stroke();
+  const angle = Math.atan2(dy, dx);
+  ctx.beginPath();
+  ctx.moveTo(ex, ey);
+  ctx.lineTo(ex - 6 * Math.cos(angle - 0.4), ey - 6 * Math.sin(angle - 0.4));
+  ctx.lineTo(ex - 6 * Math.cos(angle + 0.4), ey - 6 * Math.sin(angle + 0.4));
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+}
+
 function drawTopView() {
   const canvas = document.getElementById('ai-topview-canvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height;
   const cx = W / 2, cy = H / 2;
-  const scale = W / 2 / 20; // 20 degrees = half width
+  const SCALE = 8; // px per degree
 
+  ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = '#0d1117';
   ctx.fillRect(0, 0, W, H);
 
-  // Reference circles: 5°, 10°, 15°
-  [5, 10, 15].forEach((deg, i) => {
+  // Warning circle at 15°
+  ctx.beginPath();
+  ctx.arc(cx, cy, 15 * SCALE, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(255, 68, 68, 0.4)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 4]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Inner ref circles at 5° and 10°
+  [5, 10].forEach(d => {
     ctx.beginPath();
-    ctx.arc(cx, cy, deg * scale, 0, Math.PI * 2);
-    ctx.strokeStyle = i === 2 ? '#ff4444' : i === 1 ? '#ff9d00' : '#2a3441';
+    ctx.arc(cx, cy, d * SCALE, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
     ctx.lineWidth = 1;
-    ctx.setLineDash(i === 2 ? [4, 4] : []);
     ctx.stroke();
-    ctx.setLineDash([]);
-    if (i < 2) {
-      ctx.fillStyle = '#3a4a5a';
-      ctx.font = '9px monospace';
-      ctx.fillText(`${deg}°`, cx + deg * scale + 2, cy - 2);
-    }
   });
 
-  // Trail
-  const state = aiController.pendulum.state;
-  const px = state.theta_x * 180 / Math.PI;
-  const pz = state.theta_y * 180 / Math.PI;
+  // Crosshair
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, H); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(W, cy); ctx.stroke();
 
-  tvTrail.push({ x: cx + px * scale, y: cy + pz * scale });
+  // Trail with gradient fade
+  const state = aiController.pendulum.state;
+  tvTrail.push({ x: state.theta_x, y: state.theta_y });
   if (tvTrail.length > TV_TRAIL_MAX) tvTrail.shift();
 
   if (tvTrail.length > 1) {
     ctx.beginPath();
-    ctx.moveTo(tvTrail[0].x, tvTrail[0].y);
-    tvTrail.forEach(p => ctx.lineTo(p.x, p.y));
-    ctx.strokeStyle = 'rgba(0,212,170,0.4)';
+    tvTrail.forEach((pt, i) => {
+      const x = cx + pt.x * 180 / Math.PI * SCALE;
+      const y = cy + pt.y * 180 / Math.PI * SCALE;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    const grad = ctx.createLinearGradient(0, 0, W, 0);
+    grad.addColorStop(0, 'rgba(0,212,170,0)');
+    grad.addColorStop(1, 'rgba(0,212,170,0.6)');
+    ctx.strokeStyle = grad;
     ctx.lineWidth = 1.5;
     ctx.stroke();
   }
 
-  // Load dot
+  // Wind arrow
+  const wRad = (aiController.conditions.wind_dir * Math.PI) / 180;
+  const wLen = Math.max(5, aiController.conditions.wind_speed * 2.5);
+  drawArrow2D(ctx, cx - Math.sin(wRad) * (wLen + 10), cy - Math.cos(wRad) * (wLen + 10),
+    Math.sin(wRad), Math.cos(wRad), wLen, '#4da6ff', 1.5);
+
+  // Propeller force vectors (N/E/S/W) from centre
+  const propAngles = [0, Math.PI / 2, Math.PI, -Math.PI / 2]; // N, E, S, W
+  const propLabels = ['N', 'E', 'S', 'W'];
+  let net_ax = 0, net_ay = 0;
+  aiController.mixer.pwm.forEach((p, i) => {
+    const ax = Math.sin(propAngles[i]);
+    const ay = -Math.cos(propAngles[i]);
+    const aLen = Math.abs(p) * 65;
+    if (aLen > 1.5) {
+      const col = Math.abs(p) > 0.05 ? '#00d4aa' : '#334455';
+      drawArrow2D(ctx, cx, cy, ax, ay, aLen, col, 2);
+    }
+    net_ax += ax * p;
+    net_ay += ay * p;
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '9px JetBrains Mono, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(propLabels[i], cx + ax * 36, cy + ay * 36 + 3);
+  });
+
+  // Net resultant force vector
+  const netMag = Math.sqrt(net_ax * net_ax + net_ay * net_ay);
+  const netLen = netMag * 65;
+  if (netLen > 2) {
+    const nd = 1 / netMag;
+    drawArrow2D(ctx, cx, cy, net_ax * nd, net_ay * nd, netLen, 'rgba(255,255,255,0.6)', 2.5);
+  }
+
+  // Load dot — color-coded by angle
+  const { theta_x, theta_y } = aiController.pendulum.state;
+  const lx = cx + theta_x * 180 / Math.PI * SCALE;
+  const ly = cy + theta_y * 180 / Math.PI * SCALE;
+  const tabs = Math.sqrt(theta_x * theta_x + theta_y * theta_y) * 180 / Math.PI;
+  const dotColor = tabs > 15 ? '#ff4444' : tabs > 8 ? '#ff9d00' : '#00d4aa';
+
   ctx.beginPath();
-  ctx.arc(cx + px * scale, cy + pz * scale, 5, 0, Math.PI * 2);
-  ctx.fillStyle = '#00d4aa';
+  ctx.arc(lx, ly, 5, 0, Math.PI * 2);
+  ctx.fillStyle = dotColor;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Centre dot
+  ctx.beginPath();
+  ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
   ctx.fill();
 
-  // Wind indicator
-  const windRad = (aiController.conditions.wind_dir * Math.PI / 180);
-  const wLen = Math.min(aiController.conditions.wind_speed * 1.5, 40);
-  ctx.beginPath();
-  ctx.moveTo(cx, cy);
-  ctx.lineTo(cx + Math.sin(windRad) * wLen, cy + Math.cos(windRad) * wLen);
-  ctx.strokeStyle = '#4da6ff88';
-  ctx.lineWidth = 2;
-  ctx.stroke();
+  // Scale label
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  ctx.font = '9px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(`${SCALE}px/°`, 6, H - 6);
 }
 
 // ============================================================
@@ -701,10 +824,12 @@ function initAITab() {
   aiRenderer.setLoadVisible(true, aiController.conditions.m);
 
   // Wire buttons
-  document.getElementById('ai-btn-play')?.addEventListener('click', () => {
+  document.getElementById('ai-btn-play')?.addEventListener('click', (e) => {
+    const btn = e.currentTarget;
     if (!aiController.isRunning) {
       aiController.isRunning = true;
       updatePlayBtn(true);
+      btn.classList.add('running');
       startAILoop();
       // Initial AI prediction
       const c = aiController.conditions;
@@ -713,6 +838,7 @@ function initAITab() {
     } else {
       aiController.isRunning = false;
       updatePlayBtn(false);
+      btn.classList.remove('running');
     }
   });
 
@@ -720,6 +846,7 @@ function initAITab() {
     aiController.isRunning = false;
     stopAILoop();
     updatePlayBtn(false);
+    document.getElementById('ai-btn-play')?.classList.remove('running');
     aiController.reset();
     tvTrail.length = 0;
     thetaHistory.length = 0;
@@ -733,6 +860,10 @@ function initAITab() {
     updateConditionsUI(aiController.conditions);
     updateCurrentParamsUI(aiController.params, aiController.params);
     updateScenarioTimeUI(0);
+    updateTelemetryNumbers();
+    updateMotorBars([0, 0, 0, 0]);
+    drawTopView();
+    drawTelemetryChart();
   });
 
   document.getElementById('ai-btn-ollama')?.addEventListener('click', () => {
@@ -741,6 +872,19 @@ function initAITab() {
     if (btn) {
       btn.textContent = `OLLAMA: ${aiController.useOllama ? 'ON' : 'OFF'}`;
       btn.dataset.active = aiController.useOllama ? 'true' : 'false';
+    }
+  });
+
+  document.getElementById('ai-btn-pid')?.addEventListener('click', () => {
+    aiController.pidEnabled = !aiController.pidEnabled;
+    const btn = document.getElementById('ai-btn-pid');
+    if (btn) {
+      btn.dataset.active = aiController.pidEnabled ? 'true' : 'false';
+      btn.textContent = `STABILIZER: ${aiController.pidEnabled ? 'ON' : 'OFF'}`;
+    }
+    if (aiController.pidEnabled) {
+      aiController.pidX.reset();
+      aiController.pidY.reset();
     }
   });
 

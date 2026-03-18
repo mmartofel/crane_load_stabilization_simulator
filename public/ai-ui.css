@@ -11,11 +11,10 @@
   min-height: 0;
 }
 
-#ai-left-panel,
-#ai-right-panel {
-  width: 260px;
-  min-width: 220px;
-  max-width: 300px;
+#ai-left-panel {
+  width: 280px;
+  min-width: 240px;
+  max-width: 320px;
   background: var(--bg2);
   border-right: 1px solid var(--border);
   overflow-y: auto;
@@ -26,8 +25,17 @@
 }
 
 #ai-right-panel {
+  width: 340px;
+  min-width: 280px;
+  max-width: 380px;
+  background: var(--bg2);
   border-right: none;
   border-left: 1px solid var(--border);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex-shrink: 0;
 }
 
 #ai-scene-container {
