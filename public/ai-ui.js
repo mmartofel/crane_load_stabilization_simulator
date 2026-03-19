@@ -137,7 +137,6 @@ class AIController {
       fallback:    result.fallback || false,
       explanation: result.explanation || null
     });
-    if (this.history.length > 50) this.history.shift();
     updateDecisionHistoryUI(this.history);
     updateCurrentParamsUI(this.params, this.prevParams);
     console.log('[AI] applyParams — explanation:', result.explanation,
