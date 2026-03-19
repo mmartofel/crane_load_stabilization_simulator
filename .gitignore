@@ -1,3 +1,4 @@
+.vscode
 node_modules
 package-lock.json
 *.csv
@@ -5,3 +6,4 @@ package-lock.json
 __pycache__
 session_*
 model_meta.json
+# pid_model.joblib

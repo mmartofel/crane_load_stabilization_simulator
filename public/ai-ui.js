@@ -697,12 +697,18 @@ function drawTopView() {
   // Wind arrow
   const wRad = (aiController.conditions.wind_dir * Math.PI) / 180;
   const wLen = Math.max(5, aiController.conditions.wind_speed * 2.5);
-  drawArrow2D(ctx, cx - Math.sin(wRad) * (wLen + 10), cy - Math.cos(wRad) * (wLen + 10),
-    Math.sin(wRad), Math.cos(wRad), wLen, '#4da6ff', 1.5);
+  const wox = cx - Math.sin(wRad) * (wLen + 10);
+  const woy = cy - Math.cos(wRad) * (wLen + 10);
+  drawArrow2D(ctx, wox, woy, Math.sin(wRad), Math.cos(wRad), wLen, '#4da6ff', 1.5);
+  // Wind parameters label near arrow origin
+  ctx.fillStyle = '#4da6ff';
+  ctx.font = '9px JetBrains Mono, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(`${aiController.conditions.wind_speed.toFixed(1)} m/s  ${aiController.conditions.wind_dir.toFixed(0)}\u00b0`, wox, woy - 6);
 
-  // Propeller force vectors (N/E/S/W) from centre
-  const propAngles = [0, Math.PI / 2, Math.PI, -Math.PI / 2]; // N, E, S, W
-  const propLabels = ['N', 'E', 'S', 'W'];
+  // Propeller force vectors (M1–M4 / N,E,S,W) from centre
+  const propAngles = [0, Math.PI / 2, Math.PI, -Math.PI / 2]; // M1=N, M2=E, M3=S, M4=W
+  const propLabels = ['M1', 'M2', 'M3', 'M4'];
   let net_ax = 0, net_ay = 0;
   aiController.mixer.pwm.forEach((p, i) => {
     const ax = Math.sin(propAngles[i]);
@@ -742,6 +748,11 @@ function drawTopView() {
   ctx.strokeStyle = 'rgba(255,255,255,0.3)';
   ctx.lineWidth = 1;
   ctx.stroke();
+  // Load parameters label
+  ctx.fillStyle = dotColor;
+  ctx.font = '9px JetBrains Mono, monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(`${Math.round(aiController.conditions.m)} kg  L:${aiController.conditions.L.toFixed(1)} m`, lx + 8, ly + 3);
 
   // Centre dot
   ctx.beginPath();
@@ -852,10 +863,17 @@ function initAITab() {
     thetaHistory.length = 0;
     const banner = document.getElementById('ai-finish-banner');
     if (banner) banner.style.display = 'none';
-    // Reset renderer trail and yaw
+    // Reset renderer trail, yaw, and snap load back to vertical
     if (aiRenderer) {
       aiRenderer.resetTrail();
       aiRenderer._yawOffset = 0;
+      aiRenderer.update(
+        aiController.pendulum.state,
+        [0, 0, 0, 0],
+        aiController.conditions.wind_speed,
+        aiController.conditions.wind_dir,
+        aiController.conditions.L
+      );
     }
     updateConditionsUI(aiController.conditions);
     updateCurrentParamsUI(aiController.params, aiController.params);
