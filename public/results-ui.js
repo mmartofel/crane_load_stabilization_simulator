@@ -295,6 +295,7 @@ async function saveResultsToServer(results) {
     });
     const data = await resp.json();
     console.log('Saved:', data);
+    refreshBuildModelPanel();
   } catch(e) {
     console.warn('Could not save to server:', e);
   }
@@ -1277,24 +1278,28 @@ async function buildModel() {
   }
 }
 
-async function initBuildModelPanel() {
-  // Wire BUILD MODEL button
-  document.getElementById('btn-build-model')?.addEventListener('click', buildModel);
-
-  // Check how many CSV rows exist
+async function refreshBuildModelPanel() {
   try {
     const resp = await fetch('/api/csv-stats');
     const data = await resp.json();
-    const el   = document.getElementById('bm-row-count');
+    const el  = document.getElementById('bm-row-count');
     if (el) el.textContent = data.rows;
     const btn = document.getElementById('btn-build-model');
-    if (btn) btn.disabled = data.rows < 100;
-    if (btn && data.rows < 100) {
-      btn.title = `Need ≥100 rows — currently ${data.rows}`;
+    if (btn) {
+      btn.disabled = data.rows < 100;
+      btn.title = data.rows < 100
+        ? `Need ≥100 rows — currently ${data.rows}`
+        : 'Build ML model from test data';
     }
+    const hint = document.getElementById('bm-hint');
+    if (hint) hint.style.display = data.rows < 100 ? '' : 'none';
   } catch { /* server might not have /api/csv-stats yet */ }
+}
 
-  // Check if model already trained
+async function initBuildModelPanel() {
+  // Wire BUILD MODEL button
+  document.getElementById('btn-build-model')?.addEventListener('click', buildModel);
+  await refreshBuildModelPanel();
   checkModelStatus();
 }
 

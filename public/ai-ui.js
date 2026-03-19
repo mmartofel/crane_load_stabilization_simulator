@@ -365,10 +365,14 @@ let aiAccumulator = 0;
 const AI_DT = 0.016;
 
 // Telemetry chart data
-const TV_TRAIL_MAX = 600;
+const TV_TRAIL_MAX = 1800;   // ~30 s @ 60 fps, matches 3D renderer trail length
 const tvTrail = [];
 const thetaHistory = [];
 const THETA_CHART_SECONDS = 60;
+
+// 3-channel angle chart (30s rolling — matches Top View trail and 3D trail)
+const aiGraphData = { tx: [], ty: [], tabs: [] };
+const AI_GRAPH_MAX = 1800;   // 30 s @ 60 fps
 
 // ============================================================
 // Animation Loop
@@ -413,6 +417,17 @@ function aiLoop(now) {
   thetaHistory.push(theta);
   if (thetaHistory.length > THETA_CHART_SECONDS * 60) thetaHistory.shift();
   drawTelemetryChart();
+
+  // Push to 3-channel angle chart (θx, θy, |θ|)
+  const atx = aiController.pendulum.state.theta_x * 180 / Math.PI;
+  const aty = aiController.pendulum.state.theta_y * 180 / Math.PI;
+  aiGraphData.tx.push(atx);
+  aiGraphData.ty.push(aty);
+  aiGraphData.tabs.push(Math.hypot(atx, aty));
+  if (aiGraphData.tx.length > AI_GRAPH_MAX) {
+    aiGraphData.tx.shift(); aiGraphData.ty.shift(); aiGraphData.tabs.shift();
+  }
+  drawAiAngleChart();
 
   // Update telemetry numbers
   updateTelemetryNumbers();
@@ -821,6 +836,88 @@ function drawTelemetryChart() {
 }
 
 // ============================================================
+// Canvas: 3-channel Angle Chart (30s rolling)
+// ============================================================
+
+function drawAiAngleChart() {
+  const canvas = document.getElementById('ai-angle-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  ctx.fillStyle = '#0d1117';
+  ctx.fillRect(0, 0, W, H);
+
+  const pad = { l: 28, r: 6, t: 6, b: 18 };
+  const iW  = W - pad.l - pad.r;
+  const iH  = H - pad.t - pad.b;
+  const maxDeg = 20;
+  const n    = AI_GRAPH_MAX;
+
+  // Grid lines at every 5° (positive and negative)
+  ctx.lineWidth = 1;
+  ctx.font = '8px monospace';
+  ctx.textAlign = 'right';
+  [-15, -10, -5, 0, 5, 10, 15].forEach(deg => {
+    const y = pad.t + iH * (1 - (deg + maxDeg) / (2 * maxDeg));
+    ctx.strokeStyle = deg === 0 ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.05)';
+    ctx.setLineDash(deg === 0 ? [] : [3, 3]);
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.fillText(`${deg}°`, pad.l - 2, y + 3);
+  });
+
+  // ±15° dashed red warning lines
+  [-15, 15].forEach(deg => {
+    const y = pad.t + iH * (1 - (deg + maxDeg) / (2 * maxDeg));
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y);
+    ctx.strokeStyle = 'rgba(255,68,68,0.5)';
+    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.setLineDash([]);
+  });
+
+  // Helper: draw one series
+  function drawSeries(data, color) {
+    if (data.length < 2) return;
+    ctx.beginPath();
+    data.forEach((v, i) => {
+      const x = pad.l + (i / n) * iW;
+      const y = pad.t + iH * (1 - (Math.max(-maxDeg, Math.min(maxDeg, v)) + maxDeg) / (2 * maxDeg));
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  // Draw |θ| (gray, behind)
+  drawSeries(aiGraphData.tabs, 'rgba(200,200,200,0.8)');
+  // Draw θx (blue)
+  drawSeries(aiGraphData.tx, '#4da6ff');
+  // Draw θy (orange)
+  drawSeries(aiGraphData.ty, '#ff9d00');
+
+  // X-axis labels: -30s … 0s
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.font = '8px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('-30s', pad.l, H - 4);
+  ctx.fillText('0s',   W - pad.r, H - 4);
+
+  // Legend (top-right)
+  const lx = W - pad.r - 2;
+  const ly = pad.t + 4;
+  [['θx', '#4da6ff'], ['θy', '#ff9d00'], ['|θ|', 'rgba(200,200,200,0.8)']].forEach(([label, col], i) => {
+    ctx.fillStyle = col;
+    ctx.textAlign = 'right';
+    ctx.fillText(label, lx, ly + i * 11);
+  });
+}
+
+// ============================================================
 // Init & Event Wiring
 // ============================================================
 
@@ -862,6 +959,7 @@ function initAITab() {
     aiController.reset();
     tvTrail.length = 0;
     thetaHistory.length = 0;
+    aiGraphData.tx.length = 0; aiGraphData.ty.length = 0; aiGraphData.tabs.length = 0;
     const banner = document.getElementById('ai-finish-banner');
     if (banner) banner.style.display = 'none';
     // Reset renderer trail, yaw, and snap load back to vertical
@@ -883,6 +981,7 @@ function initAITab() {
     updateMotorBars([0, 0, 0, 0]);
     drawTopView();
     drawTelemetryChart();
+    drawAiAngleChart();
   });
 
   document.getElementById('ai-btn-ollama')?.addEventListener('click', () => {
@@ -938,6 +1037,7 @@ window.addEventListener('ai-tab-activated', () => {
       aiLastTime = now;
       drawTopView();
       drawTelemetryChart();
+      drawAiAngleChart();
       aiAnimRunning = false;
     });
   }
