@@ -50,29 +50,69 @@ function hideChartTooltip() {
 // ============================================================
 // Tab switching
 // ============================================================
+// ============================================================
+// Global: unlock AI DRIVEN tab (called from results-ui or ai-ui)
+// ============================================================
+window.unlockAIDrivenTab = function() {
+  const btn = document.getElementById('tab-ai-driven');
+  if (!btn) return;
+  btn.disabled = false;
+  const lock = btn.querySelector('.tab-lock');
+  if (lock) lock.remove();
+  if (!btn.querySelector('.tab-badge')) {
+    const badge = document.createElement('span');
+    badge.className = 'tab-badge';
+    badge.textContent = ' ●';
+    btn.appendChild(badge);
+  }
+  sessionStorage.setItem('ai_model_ready', '1');
+};
+
 function initTabs() {
-  const tabSim = document.getElementById('tab-sim');
-  const tabPid = document.getElementById('tab-pid');
-  const appDiv = document.getElementById('app');
-  const pidDiv = document.getElementById('pid-tester');
+  const tabSim  = document.getElementById('tab-sim');
+  const tabPid  = document.getElementById('tab-pid');
+  const tabAi   = document.getElementById('tab-ai-driven');
+  const tabRep  = document.getElementById('tab-reports');
+  const appDiv  = document.getElementById('app');
+  const pidDiv  = document.getElementById('pid-tester');
+  const aiDiv   = document.getElementById('ai-driven-view');
+  const repDiv  = document.getElementById('reports-view');
 
   if (!tabSim || !tabPid) return;
 
+  // Helper: hide all views and deactivate all tabs
+  function showOnly(activeTab, activeDiv, extraDisplay = '') {
+    [appDiv, pidDiv, aiDiv, repDiv].forEach(d => { if (d) d.style.display = 'none'; });
+    [tabSim, tabPid, tabAi, tabRep].forEach(t => { if (t) t.classList.remove('active'); });
+    if (activeDiv) activeDiv.style.display = extraDisplay || 'flex';
+    if (activeTab) activeTab.classList.add('active');
+  }
+
   tabSim.addEventListener('click', () => {
-    appDiv.style.display = '';
-    pidDiv.style.display = 'none';
-    tabSim.classList.add('active');
-    tabPid.classList.remove('active');
+    showOnly(tabSim, appDiv, '');
+    if (appDiv) appDiv.style.display = '';  // reset to flex from CSS
   });
 
   tabPid.addEventListener('click', () => {
-    appDiv.style.display = 'none';
-    pidDiv.style.display = 'flex';
-    tabSim.classList.remove('active');
-    tabPid.classList.add('active');
-    // Resize charts after display change
+    showOnly(tabPid, pidDiv, 'flex');
     setTimeout(redrawAll, 50);
   });
+
+  tabAi?.addEventListener('click', () => {
+    if (tabAi.disabled) return;
+    showOnly(tabAi, aiDiv, 'flex');
+    window.dispatchEvent(new CustomEvent('ai-tab-activated'));
+  });
+
+  tabRep?.addEventListener('click', () => {
+    showOnly(tabRep, repDiv, 'flex');
+    window.dispatchEvent(new CustomEvent('reports-tab-activated'));
+  });
+
+  // Restore AI tab unlock state from sessionStorage
+  if (sessionStorage.getItem('ai_model_ready') === '1') {
+    window.unlockAIDrivenTab();
+  }
 }
 
 // ============================================================
@@ -255,6 +295,7 @@ async function saveResultsToServer(results) {
     });
     const data = await resp.json();
     console.log('Saved:', data);
+    refreshBuildModelPanel();
   } catch(e) {
     console.warn('Could not save to server:', e);
   }
@@ -1155,6 +1196,111 @@ function init() {
 
   // Initial empty renders
   redrawAll();
+
+  // BUILD MODEL panel
+  initBuildModelPanel();
+}
+
+// ============================================================
+// BUILD MODEL panel
+// ============================================================
+
+async function checkModelStatus() {
+  try {
+    const resp = await fetch('/api/ai/status');
+    const data = await resp.json();
+    if (data.trained) {
+      window.unlockAIDrivenTab();
+      const stats = data.stats || data.meta || {};
+      updateModelPanel(stats);
+    }
+  } catch { /* AI service not running */ }
+}
+
+function updateModelPanel(stats) {
+  const el = document.getElementById('model-build-status');
+  if (!el || !stats?.metrics) return;
+  const m = stats.metrics;
+  const at = stats.trained_at ? new Date(stats.trained_at).toLocaleString('en-GB') : '—';
+  el.innerHTML = `<div class="model-success">
+    <span style="color:#00d4aa">● Model ready</span> &nbsp;|&nbsp;
+    Kp R²=${m.Kp?.r2 ?? '—'} &nbsp; Ki R²=${m.Ki?.r2 ?? '—'} &nbsp; Kd R²=${m.Kd?.r2 ?? '—'}<br>
+    ${stats.n_total ?? '—'} rows used
+    &nbsp; Trained: ${at}
+  </div>`;
+  const dateEl = document.getElementById('bm-model-date');
+  if (dateEl) dateEl.textContent = `Last: ${at}`;
+}
+
+async function buildModel() {
+  const btn      = document.getElementById('btn-build-model');
+  const statusEl = document.getElementById('model-build-status');
+  if (!btn || !statusEl) return;
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Training...';
+  statusEl.innerHTML = `<div class="progress-wrap" style="margin-top:8px">
+    <div class="progress-bar-outer"><div class="progress-bar-inner" id="build-progress" style="width:0%"></div></div>
+    <div class="progress-text"><span>Training AI model...</span></div>
+  </div>`;
+
+  // Animate progress bar to 90% while waiting
+  let pct = 0;
+  const iv = setInterval(() => {
+    pct = Math.min(pct + 2, 90);
+    const bar = document.getElementById('build-progress');
+    if (bar) bar.style.width = pct + '%';
+  }, 300);
+
+  try {
+    const resp = await fetch('/api/ai/train', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ csv_path: '../data/test_results.csv' })
+    });
+    const data = await resp.json();
+    clearInterval(iv);
+    const bar = document.getElementById('build-progress');
+    if (bar) bar.style.width = '100%';
+
+    if (data.status === 'ok') {
+      updateModelPanel(data.stats);
+      window.unlockAIDrivenTab();
+    } else {
+      throw new Error(data.detail || 'Unknown error');
+    }
+  } catch (err) {
+    clearInterval(iv);
+    statusEl.innerHTML = `<div class="model-error">✗ Training error: ${err.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔨 BUILD MODEL';
+  }
+}
+
+async function refreshBuildModelPanel() {
+  try {
+    const resp = await fetch('/api/csv-stats');
+    const data = await resp.json();
+    const el  = document.getElementById('bm-row-count');
+    if (el) el.textContent = data.rows;
+    const btn = document.getElementById('btn-build-model');
+    if (btn) {
+      btn.disabled = data.rows < 100;
+      btn.title = data.rows < 100
+        ? `Need ≥100 rows — currently ${data.rows}`
+        : 'Build ML model from test data';
+    }
+    const hint = document.getElementById('bm-hint');
+    if (hint) hint.style.display = data.rows < 100 ? '' : 'none';
+  } catch { /* server might not have /api/csv-stats yet */ }
+}
+
+async function initBuildModelPanel() {
+  // Wire BUILD MODEL button
+  document.getElementById('btn-build-model')?.addEventListener('click', buildModel);
+  await refreshBuildModelPanel();
+  checkModelStatus();
 }
 
 // Wait for DOM

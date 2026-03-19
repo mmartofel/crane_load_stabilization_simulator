@@ -1,0 +1,25 @@
+{
+  "n_total": 213,
+  "score_threshold": null,
+  "metrics": {
+    "Kp": {
+      "r2": 0.4295,
+      "mae": 7.1355,
+      "n_train": 170,
+      "n_test": 43
+    },
+    "Ki": {
+      "r2": -0.0095,
+      "mae": 0.125,
+      "n_train": 170,
+      "n_test": 43
+    },
+    "Kd": {
+      "r2": -0.0351,
+      "mae": 3.7649,
+      "n_train": 170,
+      "n_test": 43
+    }
+  },
+  "trained_at": "2026-03-19T22:56:48.147152Z"
+}

@@ -1,0 +1,381 @@
+/* ============================================================
+   ai-ui.css — AI DRIVEN tab styles
+   ============================================================ */
+
+/* ── Tab layout (3 columns like SIMULATOR) ─────────────────── */
+#ai-driven-view {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+  min-height: 0;
+}
+
+#ai-left-panel {
+  width: 280px;
+  min-width: 240px;
+  max-width: 320px;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex-shrink: 0;
+}
+
+#ai-right-panel {
+  width: 340px;
+  min-width: 280px;
+  max-width: 380px;
+  background: var(--bg2);
+  border-right: none;
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex-shrink: 0;
+}
+
+#ai-scene-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  min-width: 0;
+  background: #0d1117;
+}
+
+#ai-scene-mount {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Panel sections ────────────────────────────────────────── */
+.ai-section {
+  border-bottom: 1px solid var(--border);
+  padding: 10px 12px;
+}
+
+.ai-section-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+/* ── Model status ──────────────────────────────────────────── */
+.ai-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.ai-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ai-dot-ok   { background: #00d4aa; box-shadow: 0 0 6px #00d4aa88; }
+.ai-dot-warn { background: #ff9d00; box-shadow: 0 0 6px #ff9d0088; }
+
+.ai-status-label { color: var(--text); font-family: var(--font-mono); }
+.ai-status-sub   { color: var(--text-dim); font-size: 10px; margin-top: 2px; }
+
+/* ── Parameter bars ────────────────────────────────────────── */
+.ai-param-row {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.ai-param-key {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.ai-param-bar-wrap {
+  height: 6px;
+  background: var(--bg3);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.ai-param-bar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.2s ease;
+}
+
+.ai-param-val {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+  min-width: 38px;
+  text-align: right;
+}
+
+.ai-param-val.up   { color: #00d4aa; }
+.ai-param-val.down { color: #ff9d00; }
+
+.ai-param-prev {
+  grid-column: 2 / 4;
+  font-size: 9px;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  margin-top: -4px;
+  margin-bottom: 2px;
+}
+
+/* ── Conditions ─────────────────────────────────────────────── */
+.ai-cond-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.ai-cond-item {
+  font-size: 11px;
+}
+
+.ai-cond-key   { color: var(--text-dim); font-size: 10px; }
+.ai-cond-val   { color: var(--text); font-family: var(--font-mono); }
+
+.ai-cond-phase {
+  grid-column: 1 / 3;
+  font-size: 10px;
+  color: var(--accent);
+  font-weight: 600;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2px;
+}
+
+/* ── Ollama panel ─────────────────────────────────────────── */
+.ai-ollama-text {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  font-style: italic;
+  min-height: 40px;
+}
+
+/* ── Timeline ───────────────────────────────────────────────── */
+.ai-timeline-wrap {
+  position: relative;
+  height: 10px;
+  background: var(--bg3);
+  border-radius: 5px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+#ai-timeline-progress {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: var(--accent);
+  border-radius: 5px;
+  transition: width 0.5s linear;
+}
+
+.ai-timeline-time {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.ai-next-event {
+  font-size: 10px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Control buttons ────────────────────────────────────────── */
+.ai-btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 12px;
+}
+
+/* ── Phase banner (in 3D scene overlay) ─────────────────────── */
+#ai-phase-banner {
+  position: absolute;
+  bottom: 0;
+  left: 0; right: 0;
+  text-align: center;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  letter-spacing: 0.05em;
+  border-top: 2px solid;
+  background: #1D9E7522;
+  color: #1D9E75;
+  pointer-events: none;
+  transition: background 0.3s, color 0.3s;
+}
+
+#ai-scene-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 12px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+  flex-shrink: 0;
+  gap: 12px;
+}
+
+#ai-scenario-time {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+#ai-next-update-info {
+  color: var(--text-dim);
+}
+
+/* ── Decision history list ──────────────────────────────────── */
+#ai-decision-list {
+  max-height: 200px;
+  overflow-y: auto;
+  font-size: 10px;
+}
+
+.ai-hist-item {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  grid-template-rows: auto auto;
+  gap: 0 6px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.ai-hist-item.forced {
+  border-left: 2px solid #ff9d00;
+  padding-left: 4px;
+}
+
+.ai-hist-t {
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+  grid-row: 1;
+  grid-column: 1;
+}
+
+.ai-hist-delta {
+  font-family: var(--font-mono);
+  color: var(--text);
+  grid-row: 1;
+  grid-column: 2;
+}
+
+.ai-hist-reason {
+  color: var(--text-dim);
+  grid-row: 2;
+  grid-column: 2;
+  font-size: 9px;
+}
+
+.ai-hist-empty { color: var(--text-dim); font-style: italic; padding: 8px 0; }
+
+/* ── Metrics cards ──────────────────────────────────────────── */
+.ai-metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 4px;
+}
+
+.ai-metric-card {
+  background: var(--bg3);
+  border-radius: 6px;
+  padding: 6px 8px;
+  text-align: center;
+}
+
+.ai-metric-val {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.ai-metric-label {
+  font-size: 9px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+/* ── Finish banner ──────────────────────────────────────────── */
+#ai-finish-banner {
+  display: none;
+  position: absolute;
+  top: 40px; left: 50%;
+  transform: translateX(-50%);
+  background: #00d4aa22;
+  border: 1px solid #00d4aa;
+  color: #00d4aa;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: var(--font-mono);
+  text-align: center;
+  z-index: 10;
+  max-width: 90%;
+  white-space: nowrap;
+}
+
+/* ── Top View PIP overlay ───────────────────────────────────── */
+#ai-topview-overlay {
+  position: absolute;
+  bottom: 36px;       /* clears #ai-phase-banner (~30px) + 6px gap */
+  right: 8px;
+  z-index: 5;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(13, 17, 23, 0.82);
+  pointer-events: none;  /* does not block OrbitControls mouse events on 3D scene */
+}
+
+#ai-topview-overlay canvas {
+  display: block;
+}
+
+/* ── Angle chart canvas ─────────────────────────────────────── */
+#ai-angle-canvas {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg3);
+  display: block;
+}
+
+/* ── Tab lock/badge ─────────────────────────────────────────── */
+.tab-lock  { font-size: 11px; margin-left: 4px; opacity: 0.7; }
+.tab-badge { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+             background: var(--accent); margin-left: 5px; vertical-align: middle; }
+
+/* Disabled tab styling */
+button.tab-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
