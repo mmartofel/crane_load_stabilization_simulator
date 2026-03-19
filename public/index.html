@@ -111,6 +111,10 @@
         <span id="scene-status" class="status-badge status-ok">READY</span>
       </div>
       <div id="threejs-mount"></div>
+      <!-- Top View PIP overlay — bottom-right corner of 3D scene -->
+      <div id="topview-overlay">
+        <canvas id="topview-canvas" width="288" height="288"></canvas>
+      </div>
     </main>
 
     <!-- RIGHT PANEL: Telemetry + Top view + Graph -->
@@ -164,14 +168,6 @@
           <div class="motor-bar-wrap"><div class="motor-bar" id="m4-bar"></div></div>
           <span class="motor-val" id="m4-val">0%</span>
         </div>
-      </div>
-
-      <div class="panel-header panel-header-sub">
-        <span class="panel-icon">🎯</span>
-        <h3>TOP VIEW</h3>
-      </div>
-      <div id="topview-wrap">
-        <canvas id="topview-canvas" width="280" height="280"></canvas>
       </div>
 
       <div class="panel-header panel-header-sub">

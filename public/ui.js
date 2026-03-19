@@ -563,6 +563,9 @@ function bindControls() {
     graphData.tabs.length = 0;
     tvTrail.length = 0;
     if (craneRenderer) craneRenderer.resetTrail();
+    updateTelemetry();
+    updateTopView();
+    updateGraph();
   });
 
   // PID toggle
