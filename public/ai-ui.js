@@ -231,11 +231,13 @@ class AIController {
       this._lastTsRecord = this.scenarioTime;
       const theta = Math.hypot(this.pendulum.state.theta_x, this.pendulum.state.theta_y);
       this.timeseries.push({
-        t:     Math.round(this.scenarioTime),
-        theta: +(theta * 180 / Math.PI).toFixed(3),
-        Kp:    +this.params.Kp.toFixed(3),
-        Ki:    +this.params.Ki.toFixed(4),
-        Kd:    +this.params.Kd.toFixed(3)
+        t:       Math.round(this.scenarioTime),
+        theta:   +(theta * 180 / Math.PI).toFixed(3),
+        theta_x: +this.pendulum.state.theta_x.toFixed(5),
+        theta_y: +this.pendulum.state.theta_y.toFixed(5),
+        Kp:      +this.params.Kp.toFixed(3),
+        Ki:      +this.params.Ki.toFixed(4),
+        Kd:      +this.params.Kd.toFixed(3)
       });
     }
 

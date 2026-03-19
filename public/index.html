@@ -612,7 +612,8 @@
 
     <!-- Main: detail / comparison -->
     <div id="reports-main">
-      <div class="rep-main-header">
+      <!-- Session header: title + export buttons -->
+      <div id="reports-header" class="rep-main-header">
         <span class="rep-main-title" id="rep-session-title">Select a session</span>
         <div class="rep-action-row">
           <button id="rep-btn-back" class="btn btn-secondary" style="display:none">← Back</button>
@@ -621,42 +622,53 @@
         </div>
       </div>
 
-      <!-- Session detail -->
+      <!-- Session detail: summary cards + two-column body -->
       <div id="reports-detail">
-        <div class="rep-cards-row">
+        <!-- Summary cards row -->
+        <div id="reports-summary">
           <div class="rep-card"><div class="rep-card-val" id="rep-card-avg">—</div><div class="rep-card-label">Avg |θ| [°]</div></div>
           <div class="rep-card"><div class="rep-card-val" id="rep-card-max">—</div><div class="rep-card-label">Max |θ| [°]</div></div>
           <div class="rep-card"><div class="rep-card-val" id="rep-card-updates">—</div><div class="rep-card-label">AI Updates</div></div>
           <div class="rep-card"><div class="rep-card-val" id="rep-card-forced">—</div><div class="rep-card-label">Forced</div></div>
         </div>
 
-        <div class="rep-chart-card">
-          <div class="rep-chart-title">Deflection θ(t) — full scenario</div>
-          <canvas id="rep-theta-chart" style="width:100%;height:220px"></canvas>
-        </div>
-
-        <div class="rep-chart-card">
-          <div class="rep-chart-title">PID gains Kp / Ki / Kd over time</div>
-          <canvas id="rep-params-chart" style="width:100%;height:160px"></canvas>
-        </div>
-
-        <div class="rep-chart-card">
-          <div class="rep-chart-title">Metrics per phase</div>
-          <div class="rep-table-wrap">
-            <table class="rep-table">
-              <thead><tr><th>Phase</th><th>Avg θ</th><th>Max θ</th><th>Decisions</th></tr></thead>
-              <tbody id="rep-phase-table-body"></tbody>
-            </table>
+        <!-- Two-column body: left (charts + phase table) | right (decision history) -->
+        <div id="reports-body-main">
+          <!-- Left column -->
+          <div id="reports-left">
+            <div id="theta-chart-container" class="rep-chart-card">
+              <div class="rep-chart-title">Deflection θ(t) — full scenario</div>
+              <canvas id="rep-theta-chart"></canvas>
+            </div>
+            <div id="pid-chart-container" class="rep-chart-card">
+              <div class="rep-chart-title">PID gains Kp / Ki / Kd over time</div>
+              <canvas id="rep-params-chart"></canvas>
+            </div>
+            <div id="phase-metrics-container" class="rep-chart-card">
+              <div class="rep-chart-title">Metrics per phase</div>
+              <div class="rep-table-wrap">
+                <table class="rep-table">
+                  <thead><tr><th>Phase</th><th>Avg θ</th><th>Max θ</th><th>Decisions</th></tr></thead>
+                  <tbody id="rep-phase-table-body"></tbody>
+                </table>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div class="rep-chart-card">
-          <div class="rep-chart-title">AI Decision History</div>
-          <div class="rep-table-wrap" style="max-height:240px;overflow-y:auto">
-            <table class="rep-table">
-              <thead><tr><th>Time</th><th>Kp</th><th>Ki</th><th>Kd</th><th>Reason</th></tr></thead>
-              <tbody id="rep-decision-table-body"></tbody>
-            </table>
+          <!-- Right column: AI Decision History -->
+          <div id="reports-right">
+            <div id="decision-history-container">
+              <div class="rep-chart-title">
+                AI Decision History
+                <span id="rep-decision-count" style="color:var(--accent);margin-left:6px"></span>
+              </div>
+              <div id="decision-history-table-wrap">
+                <table class="rep-table">
+                  <thead><tr><th>Time</th><th>Kp</th><th>Ki</th><th>Kd</th><th>Reason</th></tr></thead>
+                  <tbody id="rep-decision-table-body"></tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
       </div>

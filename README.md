@@ -201,13 +201,15 @@ Switch to the **REPORTS** tab to review and compare AI-driven sessions:
 | Feature | Description |
 |---|---|
 | 📃 **Session list** | All saved sessions sorted by date; click to open detail view |
-| 📈 **Timeseries chart** | θ(t) for the full 6-minute run with phase backgrounds and forced-update markers |
-| 📉 **PID gains chart** | Kp / Ki / Kd over time with forced-update markers |
-| 📋 **Phase table** | Per-phase avg/max θ and decision counts (scrollable, all 4 phases visible) |
-| 📜 **Decision history** | Full AI decision log: time, gain deltas, reason, forced/fallback status |
+| 📈 **Deflection chart** | θ(t) 300px canvas, zero at 85% height; grid lines every 5°; phase color backgrounds + flag labels (name + L/m/wind params); forced-event markers |
+| 📉 **PID gains chart** | Kp / Ki / Kd over time, 220px canvas; three independent Y-scales; same X-axis alignment as θ(t) chart; legend with current values |
+| 🔗 **Hover correlation** | Mouse over any row in Decision History → yellow cursor line appears on both charts simultaneously with value circle(s) |
+| 📋 **Phase table** | Per-phase avg/max θ and decision counts; all scenario phases always shown (with fallback computation if `session.phases` is empty) |
+| 📜 **Decision history** | Full AI decision log in right column: time, gain deltas (prev→new ↑↓ with color), reason, forced/fallback flags |
 | 📊 **Multi-session comparison** | Select 2–4 sessions; bar chart shows avg θ per session with auto-scaled Y-axis and degree labels |
 | 🗑️ **Delete selected** | Checkbox-select one or more sessions and delete them; detail panel auto-advances to next available session |
 | ↓ **Export** | Download decisions as CSV or full session as JSON |
+| 📐 **Responsive layout** | Two-column viewport-fit layout; charts resize automatically via ResizeObserver |
 
 ---
 
