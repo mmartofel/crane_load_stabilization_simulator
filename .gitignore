@@ -5,5 +5,5 @@ package-lock.json
 .venv
 __pycache__
 session_*
-model_meta.json
+# model_meta.json
 # pid_model.joblib
