@@ -111,6 +111,10 @@
         <span id="scene-status" class="status-badge status-ok">READY</span>
       </div>
       <div id="threejs-mount"></div>
+      <!-- Top View PIP overlay — bottom-right corner of 3D scene -->
+      <div id="topview-overlay">
+        <canvas id="topview-canvas" width="288" height="288"></canvas>
+      </div>
     </main>
 
     <!-- RIGHT PANEL: Telemetry + Top view + Graph -->
@@ -167,14 +171,6 @@
       </div>
 
       <div class="panel-header panel-header-sub">
-        <span class="panel-icon">🎯</span>
-        <h3>TOP VIEW</h3>
-      </div>
-      <div id="topview-wrap">
-        <canvas id="topview-canvas" width="280" height="280"></canvas>
-      </div>
-
-      <div class="panel-header panel-header-sub">
         <span class="panel-icon">📈</span>
         <h3>ANGLE CHART (30s)</h3>
       </div>
@@ -199,6 +195,9 @@
           <span>Data: <span id="bm-row-count">—</span> rows</span>
           <span id="bm-model-date" style="color:var(--text-dim);font-size:10px"></span>
         </div>
+        <p id="bm-hint" style="margin:4px 0 6px;font-size:11px;color:var(--text-dim);">
+          ⚠ Need ≥100 test records to train the model
+        </p>
         <button id="btn-build-model" class="pid-btn pid-btn-primary" disabled
                 title="Requires ≥100 rows in test results">🔨 BUILD MODEL</button>
         <div id="model-build-status"></div>
@@ -513,6 +512,10 @@
         <span style="font-size:10px;color:var(--text-dim)">AI update: <span id="ai-next-update-info">—</span></span>
       </div>
       <div id="ai-scene-mount" style="flex:1;min-height:0;position:relative"></div>
+      <!-- Top View PIP overlay — bottom-right corner of 3D scene -->
+      <div id="ai-topview-overlay">
+        <canvas id="ai-topview-canvas" width="288" height="288"></canvas>
+      </div>
       <div id="ai-phase-banner">Cycle 1 — load 50 kg</div>
       <div id="ai-finish-banner"></div>
     </main>
@@ -586,9 +589,10 @@
       </div>
 
       <div class="ai-section">
-        <div class="ai-section-title">Top View</div>
-        <canvas id="ai-topview-canvas" width="234" height="200" style="width:100%"></canvas>
+        <div class="ai-section-title">Angle Chart (30s)</div>
+        <canvas id="ai-angle-canvas" width="306" height="120" style="width:100%"></canvas>
       </div>
+
     </div>
   </section>
 

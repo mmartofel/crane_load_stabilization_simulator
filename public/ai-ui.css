@@ -344,6 +344,31 @@
   white-space: nowrap;
 }
 
+/* ── Top View PIP overlay ───────────────────────────────────── */
+#ai-topview-overlay {
+  position: absolute;
+  bottom: 36px;       /* clears #ai-phase-banner (~30px) + 6px gap */
+  right: 8px;
+  z-index: 5;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(13, 17, 23, 0.82);
+  pointer-events: none;  /* does not block OrbitControls mouse events on 3D scene */
+}
+
+#ai-topview-overlay canvas {
+  display: block;
+}
+
+/* ── Angle chart canvas ─────────────────────────────────────── */
+#ai-angle-canvas {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg3);
+  display: block;
+}
+
 /* ── Tab lock/badge ─────────────────────────────────────────── */
 .tab-lock  { font-size: 11px; margin-left: 4px; opacity: 0.7; }
 .tab-badge { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
