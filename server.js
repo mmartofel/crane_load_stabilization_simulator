@@ -118,6 +118,11 @@ app.get('/api/csv-stats', (req, res) => {
 
 // ── STATIC FILES ──────────────────────────────────────────────────────────
 
+// Prevent browser caching of static assets so changes are always served fresh
+app.use((req, res, next) => {
+  res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+  next();
+});
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.listen(PORT, () => {
