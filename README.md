@@ -42,6 +42,14 @@ A **Reports tab** stores and compares AI-driven sessions, showing timeseries cha
 
 ![Screenshot of DŹWIK](img/dzwik02.png)
 
+![Screenshot of DŹWIK](img/dzwik03.png)
+
+![Screenshot of DŹWIK](img/dzwik04.png)
+
+![Screenshot of DŹWIK](img/dzwik05.png)
+
+![Screenshot of DŹWIK](img/dzwik06.png)
+
 ---
 
 ## 📦 Requirements
