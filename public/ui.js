@@ -563,6 +563,7 @@ function bindControls() {
     graphData.tabs.length = 0;
     tvTrail.length = 0;
     if (craneRenderer) craneRenderer.resetTrail();
+    telemFrame = 5;  // ensure telemFrame++ → 6 passes the % 6 === 0 check
     updateTelemetry();
     updateTopView();
     updateGraph();
