@@ -284,4 +284,61 @@ Integrated with **4th-order Runge-Kutta** at a fixed 16 ms timestep. Propeller f
 
 ---
 
+## 🤝 How to Contribute
+
+Contributions are welcome! Please follow the standard GitHub fork-and-pull-request workflow:
+
+### 1. Fork the repository
+
+Click **Fork** on the GitHub page, then clone your fork locally:
+
+```bash
+git clone https://github.com/<your-username>/crane_load_stabilization_simulator.git
+cd crane-simulator
+```
+
+### 2. Create a feature branch
+
+```bash
+git checkout -b feature/my-improvement
+```
+
+Use a descriptive name: `feature/…`, `fix/…`, or `docs/…`.
+
+### 3. Make your changes
+
+Follow the conventions in `CLAUDE.md`:
+- All visible labels and UI text in **English**.
+- All code comments in **English**.
+- No build step required — test by running `npm start` and opening `http://localhost:3000`.
+
+### 4. Commit with a clear message
+
+```bash
+git add <changed-files>
+git commit -m "fix: correct PID integral windup threshold"
+```
+
+Use the [Conventional Commits](https://www.conventionalcommits.org/) style: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`.
+
+### 5. Push and open a Pull Request
+
+```bash
+git push origin feature/my-improvement
+```
+
+Then open a Pull Request against the `main` branch on GitHub. Describe **what** you changed and **why**.
+
+### 6. Code-review and merge
+
+A maintainer will review your PR. Address any feedback, then it will be merged.
+
+---
+
+### Reporting bugs or requesting features
+
+Open a [GitHub Issue](https://github.com/mmartofel/crane_load_stabilization_simulator/issues) with a clear title and description. For bugs, include reproduction steps and browser/Node.js version.
+
+---
+
 🎓 *Developed as a prototype at the University of Southern Denmark.*
