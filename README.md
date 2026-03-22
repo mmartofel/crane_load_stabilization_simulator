@@ -123,8 +123,9 @@ crane-simulator/
 │   ├── 🐍  app.py                 # Flask REST API: /api/ai/predict, /train, /status, /ollama
 │   └── 🧠  model.py               # PIDPredictor: GradientBoosting + StandardScaler pipeline
 └── 📁  data/
-    ├── 📄  pid_results.csv         # Accumulated PID test results used to train the ML model
-    └── 📄  model_meta.json         # Model metadata (R², row count, training timestamp)
+    ├── 📄  test_results.csv        # PID optimizer test results — see [data/README.md](data/README.md)
+    ├── 📄  model_meta.json         # Model metadata (R², row count, training timestamp)
+    └── 📁  ai_sessions/            # AI DRIVEN scenario session JSON files (used by Reports tab)
 ```
 
 ---
@@ -251,7 +252,9 @@ Integrated with **4th-order Runge-Kutta** at a fixed 16 ms timestep. Propeller f
 | `GET` | `/api/results` | Load saved results (`?top=N&sort=score`) |
 | `GET` | `/api/results/export` | Export as CSV |
 | `DELETE` | `/api/results` | Clear all results |
-| `GET` | `/api/csv-stats` | Row count in pid_results.csv |
+| `GET` | `/api/csv-stats` | Row count in test_results.csv |
+
+> See [data/README.md](data/README.md) for a full description of every CSV column, unit, and value range.
 
 ### Sessions (AI DRIVEN scenario persistence)
 
