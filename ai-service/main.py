@@ -64,10 +64,19 @@ async def train(req: TrainRequest):
 
 @app.get("/status")
 async def status():
+    metrics = predictor.training_stats.get('metrics', {})
     return {
         "trained":           predictor.is_trained,
         "stats":             predictor.training_stats,
-        "model_file_exists": os.path.exists(predictor.MODEL_PATH)
+        "model_file_exists": os.path.exists(predictor.MODEL_PATH),
+        # Per-parameter R² for the Build Model panel in the frontend
+        "r2_detail": {
+            "Kp": metrics.get('Kp', {}).get('r2', None),
+            "Ki": metrics.get('Ki', {}).get('r2', None),
+            "Kd": metrics.get('Kd', {}).get('r2', None),
+        },
+        # Training data range so the frontend can show it without re-parsing CSV
+        "training_range": predictor.training_stats.get('data_range', None),
     }
 
 if __name__ == "__main__":

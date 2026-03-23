@@ -13,6 +13,22 @@ const Y_MAX_FRAC         = 0.05; // max value at 5% from top
 let hoverTimeS     = null;
 let _activeSession = null;  // session currently displayed
 
+// ── Confidence pill renderer for decision table ───────────────
+function renderConfCell(conf) {
+  if (conf == null) return '<td class="conf-cell">—</td>';
+  const color   = window.confidenceColor   ? window.confidenceColor(conf)   : '#00d4aa';
+  const bgColor = window.confidenceBgColor ? window.confidenceBgColor(conf) : 'rgba(0,212,170,0.12)';
+  const label   = window.confidenceLabel   ? window.confidenceLabel(conf)   : '';
+  const pct     = Math.round(conf * 100);
+  return `
+    <td class="conf-cell">
+      <div class="conf-pill" style="background:${bgColor};color:${color}">
+        <div class="conf-pill-bar" style="width:${pct}%;background:${color}"></div>
+        <span class="conf-pill-text">${conf.toFixed(2)} ${label}</span>
+      </div>
+    </td>`;
+}
+
 // ── Shared X-axis mapping (both charts use identical scale) ───
 function timeToX(timeS, canvasWidth) {
   const usableWidth = canvasWidth - CHART_LEFT_MARGIN - CHART_RIGHT_MARGIN;
@@ -298,6 +314,7 @@ class ReportsUI {
     this.renderSummaryCards(session);
     this.renderPhaseTable(session);
     this.renderDecisionTable(session);
+    this.renderModelInfo(session);
 
     // Defer canvas renders until layout is fully computed
     requestAnimationFrame(() => {
@@ -347,6 +364,25 @@ class ReportsUI {
     set('rep-card-max',     (m.max_theta_deg ?? '—') + '°');
     set('rep-card-updates', m.ai_updates ?? '—');
     set('rep-card-forced',  m.forced_updates ?? '—');
+
+    // AVG CONF card
+    const decisions = session.ai_decisions || [];
+    const withConf  = decisions.filter(d => d.confidence != null);
+    const confEl    = document.getElementById('rep-card-conf');
+    if (confEl) {
+      if (withConf.length > 0) {
+        const avg   = withConf.reduce((s, d) => s + d.confidence, 0) / withConf.length;
+        const color = window.confidenceColor ? window.confidenceColor(avg) : '#00d4aa';
+        const label = window.confidenceLabel ? window.confidenceLabel(avg) : '';
+        confEl.textContent = avg.toFixed(2);
+        confEl.style.color = color;
+        const labelEl = confEl.parentElement?.querySelector('.rep-card-label');
+        if (labelEl) labelEl.textContent = `Avg Conf (${label})`;
+      } else {
+        confEl.textContent = '—';
+        confEl.style.color = '';
+      }
+    }
   }
 
   renderThetaChart(session) {
@@ -647,7 +683,7 @@ class ReportsUI {
     if (countEl) countEl.textContent = `(${decisions.length})`;
 
     if (decisions.length === 0) {
-      el.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No decisions recorded</td></tr>';
+      el.innerHTML = '<tr><td colspan="6" style="color:var(--text-dim)">No decisions recorded</td></tr>';
       return;
     }
 
@@ -675,6 +711,7 @@ class ReportsUI {
         <td>${fmtGain(d.Kp, d.prevKp, 2)}</td>
         <td>${fmtGain(d.Ki, d.prevKi, 3)}</td>
         <td>${fmtGain(d.Kd, d.prevKd, 2)}</td>
+        ${renderConfCell(d.confidence)}
         <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(d.reason || '').replace(/_/g, ' ')}</td>
       `;
 
@@ -691,6 +728,73 @@ class ReportsUI {
 
       el.appendChild(tr);
     });
+  }
+
+  async renderModelInfo(session) {
+    const container = document.getElementById('model-info-container');
+    const content   = document.getElementById('model-info-content');
+    if (!container || !content) return;
+
+    // Fetch current model status from AI service
+    let statsData = null;
+    try {
+      const resp = await fetch('/api/ai/status');
+      if (resp.ok) statsData = await resp.json();
+    } catch { /* AI service may not be running */ }
+
+    if (!statsData?.trained) {
+      container.style.display = 'none';
+      return;
+    }
+    container.style.display = '';
+
+    const stats   = statsData.stats || {};
+    const metrics = stats.metrics   || {};
+    const dr      = stats.data_range || {};
+    const at      = stats.trained_at ? new Date(stats.trained_at).toLocaleString('en-GB') : '—';
+
+    // Count low-confidence decisions in this session
+    const decisions = session.ai_decisions || [];
+    const lowConfDecisions = decisions.filter(d => d.confidence != null && d.confidence < 0.75);
+    const lowConfNote = lowConfDecisions.length > 0
+      ? `<div style="font-size:10px;color:var(--warn);margin-top:4px">
+           ⚠ Low confidence: ${lowConfDecisions.length} decision(s) (${Math.round(lowConfDecisions.length / Math.max(decisions.length,1) * 100)}%)
+         </div>`
+      : '';
+
+    const rows = ['Kp', 'Ki', 'Kd'].map(p => {
+      const r2  = metrics[p]?.r2  ?? null;
+      const mae = metrics[p]?.mae ?? null;
+      const pct   = r2 != null ? Math.round(r2 * 100) : 0;
+      const color = window.confidenceColor ? window.confidenceColor(r2 ?? 0) : '#00d4aa';
+      const lbl   = window.confidenceLabel ? window.confidenceLabel(r2 ?? 0) : '—';
+      return `
+        <div class="model-param-row">
+          <span class="param-name">${p}</span>
+          <div class="r2-bar-track"><div class="r2-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+          <span class="r2-value" style="color:${color}">R²=${r2 != null ? r2.toFixed(2) : '—'}</span>
+          <span class="r2-label" style="color:${color}">${lbl}</span>
+          <span class="mae-value">MAE=${mae != null ? mae.toFixed(3) : '—'}</span>
+        </div>`;
+    }).join('');
+
+    content.innerHTML = `
+      <div class="model-result-panel">
+        <div class="model-result-header">
+          <span>Model: GradientBoosting &nbsp;|&nbsp; Trained: ${at}</span>
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8b949e;margin-bottom:6px">
+          ${stats.n_total ?? '—'} rows (top 30% of grid search results)
+        </div>
+        <div class="model-result-title">Model Confidence (R² on test set)</div>
+        ${rows}
+        <div class="model-range-info">Training data range:
+          L: ${dr.L_min ?? '?'}–${dr.L_max ?? '?'} m &nbsp;|&nbsp;
+          m: ${dr.m_min ?? '?'}–${dr.m_max ?? '?'} kg &nbsp;|&nbsp;
+          wind: 0–${dr.wind_max ?? '?'} m/s
+        </div>
+        ${lowConfNote}
+      </div>`;
   }
 
   exportCSV(session) {

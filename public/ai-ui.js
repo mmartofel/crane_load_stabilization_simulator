@@ -110,10 +110,7 @@ class AIController {
     const result = await this.requestPrediction(c.L, c.m, c.wind_speed, c.wind_dir);
     this.applyParams(result, reason, true);
     this.lastUpdate = this.scenarioTime;
-    // Update model status display
-    if (result.model && result.model !== 'fallback') {
-      updateModelStatus(result.model, result.confidence);
-    }
+    // updateConfidencePanel is already called inside applyParams
   }
 
   applyParams(result, reason = '', forced = false) {
@@ -125,17 +122,21 @@ class AIController {
     };
     this._smoothTransition(this.prevParams, this.params, 2000);
     this.history.push({
-      t:           this.scenarioTime,
-      Kp:          this.params.Kp,
-      Ki:          this.params.Ki,
-      Kd:          this.params.Kd,
-      prevKp:      this.prevParams.Kp,
-      prevKi:      this.prevParams.Ki,
-      prevKd:      this.prevParams.Kd,
+      t:               this.scenarioTime,
+      Kp:              this.params.Kp,
+      Ki:              this.params.Ki,
+      Kd:              this.params.Kd,
+      prevKp:          this.prevParams.Kp,
+      prevKi:          this.prevParams.Ki,
+      prevKd:          this.prevParams.Kd,
       reason, forced,
-      confidence:  result.confidence,
-      fallback:    result.fallback || false,
-      explanation: result.explanation || null
+      confidence:      result.confidence,
+      confidence_detail: result.confidence_detail ?? null,
+      conf_label:      result.confidence_label  ?? null,
+      conf_hint:       result.confidence_hint   ?? null,
+      in_range:        result.in_training_range ?? null,
+      fallback:        result.fallback || false,
+      explanation:     result.explanation || null
     });
     updateDecisionHistoryUI(this.history);
     updateCurrentParamsUI(this.params, this.prevParams);
@@ -150,7 +151,7 @@ class AIController {
         updateOllamaPanel('⚠ Ollama: no response received');
       }
     }
-    updateModelStatus(result.model || 'fallback', result.confidence || 0);
+    updateConfidencePanel(result);
   }
 
   _smoothTransition(from, to, durationMs) {
@@ -437,26 +438,84 @@ function aiLoop(now) {
 // UI Update Functions
 // ============================================================
 
-function updateModelStatus(model, confidence) {
-  const el = document.getElementById('ai-model-name');
-  const confEl = document.getElementById('ai-confidence');
+function updateConfidencePanel(result) {
+  const conf   = result.confidence   ?? 0;
+  const detail = result.confidence_detail ?? {};
+  const label  = result.confidence_label  ?? (window.confidenceLabel ? window.confidenceLabel(conf) : '');
+  const hint   = result.confidence_hint   ?? null;
+  const inRange = result.in_training_range;
+  const model  = result.model || 'unknown';
+
+  // Model name and status dot
+  const nameEl = document.getElementById('ai-model-name');
+  if (nameEl) nameEl.textContent = model;
   const dotEl  = document.getElementById('ai-status-dot');
-  if (el) el.textContent = model || 'unknown';
-  if (confEl) confEl.textContent = confidence != null
-    ? `${Math.round(confidence * 100)}%` : '—';
   if (dotEl) {
     const isFallback = !model || model.includes('fallback');
     dotEl.className = isFallback ? 'ai-dot ai-dot-warn' : 'ai-dot ai-dot-ok';
   }
+
+  // Main confidence bar
+  const color = window.confidenceColor ? window.confidenceColor(conf) : '#00d4aa';
+  const fillEl = document.getElementById('conf-bar-fill');
+  if (fillEl) {
+    fillEl.style.width      = (conf * 100).toFixed(0) + '%';
+    fillEl.style.background = color;
+  }
+  const valEl = document.getElementById('conf-value');
+  if (valEl) valEl.textContent = conf.toFixed(2);
+  const lblEl = document.getElementById('conf-label');
+  if (lblEl) {
+    lblEl.textContent = label;
+    lblEl.style.color = color;
+  }
+
+  // Mini bars per parameter
+  ['Kp', 'Ki', 'Kd'].forEach(p => {
+    const r2  = detail[p] ?? conf;
+    const c   = window.confidenceColor ? window.confidenceColor(r2) : '#00d4aa';
+    const bar = document.getElementById(`conf-bar-${p.toLowerCase()}`);
+    const val = document.getElementById(`conf-val-${p.toLowerCase()}`);
+    if (bar) { bar.style.width = (r2 * 100).toFixed(0) + '%'; bar.style.background = c; }
+    if (val) val.textContent = r2.toFixed(2);
+  });
+
+  // Updates count and next-update timer
+  const cntEl  = document.getElementById('ai-update-count');
+  if (cntEl) cntEl.textContent = aiController.history.length;
   const nextEl = document.getElementById('ai-next-update');
   if (nextEl) {
     const remaining = Math.max(0,
       aiController.updateEvery - (aiController.scenarioTime - aiController.lastUpdate));
     nextEl.textContent = `${Math.round(remaining)}s`;
   }
-  // Also update update count
-  const cntEl = document.getElementById('ai-update-count');
-  if (cntEl) cntEl.textContent = aiController.history.length;
+
+  // Warning / fallback banner
+  const banner = document.getElementById('conf-banner');
+  if (banner) {
+    if (conf < 0.50) {
+      banner.className = 'conf-banner conf-banner-fallback';
+      banner.innerHTML = `<strong>✗ FALLBACK MODE</strong> — ${hint || 'No data. Collect PID test results and rebuild the model.'}`;
+      banner.style.display = '';
+    } else if (conf < 0.75) {
+      banner.className = 'conf-banner conf-banner-warn';
+      banner.innerHTML = `<strong>⚠ LOW CONFIDENCE</strong> — ${hint || 'Prediction is approximate.'}`;
+      banner.style.display = '';
+    } else {
+      banner.style.display = 'none';
+    }
+  }
+
+  // Out-of-training-range banner
+  const rangeBanner = document.getElementById('conf-range-banner');
+  if (rangeBanner) {
+    if (inRange === false) {
+      rangeBanner.textContent = '⚠ Conditions outside training data range — extrapolation';
+      rangeBanner.style.display = '';
+    } else {
+      rangeBanner.style.display = 'none';
+    }
+  }
 }
 
 function updateCurrentParamsUI(params, prev) {
@@ -505,9 +564,13 @@ function updateDecisionHistoryUI(history) {
     const delta = `Kp ${h.prevKp?.toFixed(2) ?? '—'}→${h.Kp.toFixed(2)}`;
     const icon  = h.forced ? '⚡' : h.fallback ? '⚠' : '→';
     const reasonLabel = h.reason.replace(/_/g, ' ');
+    const conf  = h.confidence;
+    const confStr = conf != null
+      ? `<span style="color:${window.confidenceColor ? window.confidenceColor(conf) : '#8b949e'};font-size:10px;font-family:var(--font-mono)"> [${conf.toFixed(2)}]</span>`
+      : '';
     return `<div class="ai-hist-item ${h.forced ? 'forced' : ''}">
       <span class="ai-hist-t">${t}</span>
-      <span class="ai-hist-delta">${icon} ${delta}</span>
+      <span class="ai-hist-delta">${icon} ${delta}${confStr}</span>
       <span class="ai-hist-reason">${reasonLabel}</span>
     </div>`;
   });
@@ -1016,12 +1079,21 @@ function initAITab() {
   fetch('/api/ai/status').then(r => r.json()).then(data => {
     if (data.trained && data.stats?.metrics) {
       const m = data.stats.metrics;
-      const conf = (m.Kp?.r2 + m.Ki?.r2 + m.Kd?.r2) / 3;
-      updateModelStatus('GradientBoosting', conf);
+      const conf = ((m.Kp?.r2 || 0) + (m.Ki?.r2 || 0) + (m.Kd?.r2 || 0)) / 3;
+      updateConfidencePanel({
+        model: 'GradientBoosting',
+        confidence: conf,
+        confidence_detail: { Kp: m.Kp?.r2 || 0, Ki: m.Ki?.r2 || 0, Kd: m.Kd?.r2 || 0 },
+        confidence_label: null, confidence_hint: null, in_training_range: null
+      });
     } else {
-      updateModelStatus('analytical_fallback', 0);
+      updateConfidencePanel({ model: 'analytical_fallback', confidence: 0,
+        confidence_detail: {Kp:0, Ki:0, Kd:0}, confidence_label: 'FALLBACK',
+        confidence_hint: null, in_training_range: null });
     }
-  }).catch(() => updateModelStatus('analytical_fallback', 0));
+  }).catch(() => updateConfidencePanel({ model: 'analytical_fallback', confidence: 0,
+    confidence_detail: {Kp:0, Ki:0, Kd:0}, confidence_label: 'FALLBACK',
+    confidence_hint: null, in_training_range: null }));
 }
 
 // Activate when tab is clicked

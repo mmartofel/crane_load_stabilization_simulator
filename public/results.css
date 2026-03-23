@@ -57,6 +57,7 @@
   border-radius: 6px;
   padding: 16px;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -97,6 +98,7 @@
 
 .pid-range-row input[type="number"] {
   width: 100%;
+  min-width: 0;
   background: #0d1117;
   border: 1px solid #2a3441;
   color: #c8d4e0;
@@ -707,6 +709,113 @@
   font-family: 'JetBrains Mono', monospace;
   line-height: 1.7;
 }
+
+/* ── Model Build Result panel ─────────────────────────────── */
+.model-result-panel {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: #0a1a2a;
+  border: 1px solid #004433;
+  border-radius: 6px;
+  font-size: 12px;
+  overflow: hidden;
+}
+.model-result-header {
+  display: flex;
+  justify-content: space-between;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #8b949e;
+  margin-bottom: 8px;
+}
+.model-result-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #c8d4e0;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.model-param-row {
+  display: grid;
+  grid-template-columns: 24px 1fr auto auto;
+  column-gap: 8px;
+  row-gap: 2px;
+  margin-bottom: 6px;
+}
+.param-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: #c8d4e0;
+  align-self: center;
+}
+.r2-bar-track {
+  height: 6px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  align-self: center;
+}
+.r2-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.8s ease;
+}
+.r2-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  align-self: center;
+}
+.r2-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  align-self: center;
+}
+.mae-value {
+  grid-column: 2 / -1;
+  grid-row: 2;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #8b949e;
+}
+.model-explanation-box {
+  background: rgba(255,255,255,0.04);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin: 8px 0;
+  font-size: 11px;
+  color: #8b949e;
+  line-height: 1.6;
+}
+.model-explanation-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #c8d4e0;
+  margin-bottom: 3px;
+}
+.model-thresholds {
+  margin-top: 5px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  line-height: 1.8;
+}
+.model-range-info {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #8b949e;
+  margin: 6px 0 4px;
+}
+.model-recommendation {
+  font-size: 11px;
+  font-weight: 500;
+  margin-top: 6px;
+}
+.conf-ok   { color: #00d4aa; }
+.conf-warn { color: #ff6b35; }
+.conf-err  { color: #ff4444; }
 
 .model-error {
   margin-top: 8px;

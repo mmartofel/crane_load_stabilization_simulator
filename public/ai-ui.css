@@ -379,3 +379,129 @@ button.tab-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+/* ── Confidence panel ────────────────────────────────────────── */
+.conf-section-title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin: 10px 0 4px;
+}
+.conf-bar-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 6px;
+}
+.conf-bar-track {
+  flex: 1;
+  height: 8px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.conf-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s ease, background 0.4s ease;
+  width: 0%;
+}
+.conf-value {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  min-width: 34px;
+  color: var(--text);
+}
+.conf-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  min-width: 68px;
+}
+
+/* ── Mini bars per param (Kp / Ki / Kd) ───────────────────── */
+.conf-mini-bars { margin: 0 0 6px; }
+.conf-mini-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+.mini-param {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  width: 18px;
+  flex-shrink: 0;
+}
+.conf-bar-track.mini { height: 4px; }
+.mini-val {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  min-width: 28px;
+}
+
+/* ── Updates row ───────────────────────────────────────────── */
+.conf-updates-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-dim);
+  margin: 4px 0 6px;
+}
+
+/* ── Warning / fallback banners ───────────────────────────── */
+.conf-banner {
+  border-radius: var(--radius);
+  padding: 7px 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  margin-top: 6px;
+}
+.conf-banner-warn {
+  background: rgba(255,107,53,0.12);
+  color: var(--warn);
+  border: 0.5px solid rgba(255,107,53,0.35);
+}
+.conf-banner-fallback {
+  background: rgba(255,68,68,0.12);
+  color: var(--red);
+  border: 0.5px solid rgba(255,68,68,0.35);
+}
+.conf-range-banner {
+  font-size: 10px;
+  color: var(--warn);
+  margin-top: 4px;
+  padding: 3px 6px;
+  border-radius: var(--radius);
+  background: rgba(255,107,53,0.10);
+}
+
+/* ── Confidence pill in decision history table ─────────────── */
+.conf-cell { padding: 4px 6px; }
+.conf-pill {
+  position: relative;
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  overflow: hidden;
+  white-space: nowrap;
+  display: inline-block;
+  min-width: 80px;
+}
+.conf-pill-bar {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  opacity: 0.30;
+  pointer-events: none;
+}
+.conf-pill-text {
+  position: relative;
+  z-index: 1;
+  font-weight: 600;
+}
