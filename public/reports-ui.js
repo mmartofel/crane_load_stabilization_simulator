@@ -377,7 +377,7 @@ class ReportsUI {
         confEl.textContent = avg.toFixed(2);
         confEl.style.color = color;
         const labelEl = confEl.parentElement?.querySelector('.rep-card-label');
-        if (labelEl) labelEl.textContent = `Avg Conf (${label})`;
+        if (labelEl) labelEl.textContent = `Model Confidence (${label})`;
       } else {
         confEl.textContent = '—';
         confEl.style.color = '';
