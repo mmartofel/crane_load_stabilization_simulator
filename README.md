@@ -203,6 +203,51 @@ Switch to the **AI DRIVEN** tab for a fully automated 6-minute demonstration sce
 
 ---
 
+## 🎯 Confidence Score — ML model certainty
+
+The project uses two distinct numeric parameters that may look similar but mean different things:
+
+### Score (PID TEST — `pid_results.csv`)
+Quality metric for a PID run. **Lower = better.** Computed by `BatchOptimizer` as a weighted sum:
+
+| Metric | Weight | Meaning |
+|--------|--------|---------|
+| ISE (Integral Squared Error) | 0.30 | Penalises large deviations |
+| IAE (Integral Absolute Error) | 0.20 | Linear error penalty |
+| ITAE (Integral Time-Weighted Absolute Error) | 0.30 | Penalty grows with time |
+| Settling time t_s | 0.15 | Time until \|θ\| < 1° |
+| Overshoot | 0.05 | Peak angle after return |
+
+Score is used to filter the **top 30%** best results, which become the training data for the AI model.
+
+### Confidence (AI DRIVEN — model certainty)
+Certainty of the ML model about the current Kp/Ki/Kd prediction. **Higher = more confident.**
+Computed as the mean R² of three GradientBoosting sub-models (one per PID gain).
+
+| Range | Label | Meaning |
+|-------|-------|---------|
+| 0.90–1.00 | **VERY HIGH** | Excellent data coverage, full trust |
+| 0.75–0.90 | **HIGH** | Model confident, good training data |
+| 0.50–0.75 | **LOW** | Sparse data in this region, prediction is approximate |
+| 0.00–0.50 | **FALLBACK** | No relevant data; analytical formulas used |
+
+**When is confidence low?**
+When the current conditions (L, m, wind speed) fall outside the range of training data or are underrepresented.
+Example: if grid search tested L = 5–15 m, a prediction for L = 2 m or L = 19 m will have lower confidence.
+
+**How to improve confidence:**
+1. Run more PID tests in the missing parameter range (PID TEST tab → grid search)
+2. Click **BUILD MODEL** again — new data will be included
+3. Check the training data range shown in the Build Model result panel
+
+**Where confidence is shown in the UI:**
+- Panel "Model Status" in AI DRIVEN tab — animated bar with current value, mini bars per Kp/Ki/Kd
+- Warning banner in AI DRIVEN when confidence < 0.75 (LOW) or < 0.50 (FALLBACK)
+- Table "AI Decision History" — CONF column on every row (live and in Reports)
+- Reports tab — "Avg Conf" summary card + "Model Info" section with per-param R² bars
+
+---
+
 ## 📋 Reports tab
 
 Switch to the **REPORTS** tab to review and compare AI-driven sessions:

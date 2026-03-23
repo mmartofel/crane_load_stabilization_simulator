@@ -1219,17 +1219,75 @@ async function checkModelStatus() {
 
 function updateModelPanel(stats) {
   const el = document.getElementById('model-build-status');
-  if (!el || !stats?.metrics) return;
-  const m = stats.metrics;
-  const at = stats.trained_at ? new Date(stats.trained_at).toLocaleString('en-GB') : '—';
-  el.innerHTML = `<div class="model-success">
-    <span style="color:#00d4aa">● Model ready</span> &nbsp;|&nbsp;
-    Kp R²=${m.Kp?.r2 ?? '—'} &nbsp; Ki R²=${m.Ki?.r2 ?? '—'} &nbsp; Kd R²=${m.Kd?.r2 ?? '—'}<br>
-    ${stats.n_total ?? '—'} rows used
-    &nbsp; Trained: ${at}
-  </div>`;
+  if (!el) return;
+  if (!stats?.metrics) {
+    // Minimal display if no metrics available
+    const at = stats?.trained_at ? new Date(stats.trained_at).toLocaleString('en-GB') : '—';
+    el.innerHTML = `<div class="model-success"><span style="color:#00d4aa">● Model ready</span> &nbsp; Trained: ${at}</div>`;
+    return;
+  }
+
+  const m   = stats.metrics;
+  const at  = stats.trained_at ? new Date(stats.trained_at).toLocaleString('en-GB') : '—';
+  const dr  = stats.data_range || {};
+
   const dateEl = document.getElementById('bm-model-date');
   if (dateEl) dateEl.textContent = `Last: ${at}`;
+
+  // Per-parameter R² bar rows
+  const r2Values = ['Kp', 'Ki', 'Kd'].map(p => m[p]?.r2 ?? null);
+  const rows = ['Kp', 'Ki', 'Kd'].map((p, i) => {
+    const r2  = r2Values[i];
+    const mae = m[p]?.mae ?? null;
+    const pct = r2 != null ? Math.round(r2 * 100) : 0;
+    const color = window.confidenceColor ? window.confidenceColor(r2 ?? 0) : '#00d4aa';
+    const lbl   = window.confidenceLabel ? window.confidenceLabel(r2 ?? 0) : '—';
+    return `
+      <div class="model-param-row">
+        <span class="param-name">${p}</span>
+        <div class="r2-bar-track"><div class="r2-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+        <span class="r2-value" style="color:${color}">R²=${r2 != null ? r2.toFixed(2) : '—'}</span>
+        <span class="r2-label" style="color:${color}">${lbl}</span>
+        <span class="mae-value">MAE=${mae != null ? mae.toFixed(3) : '—'}</span>
+      </div>`;
+  }).join('');
+
+  // Overall recommendation based on minimum R²
+  const validR2s = r2Values.filter(v => v != null);
+  const minR2    = validR2s.length ? Math.min(...validR2s) : 0;
+  let recommendation;
+  if (minR2 >= 0.75) {
+    recommendation = '<span class="conf-ok">● Model is ready for AI DRIVEN</span>';
+  } else if (minR2 >= 0.50) {
+    recommendation = '<span class="conf-warn">⚠ Approximate predictions — consider more PID tests</span>';
+  } else {
+    recommendation = '<span class="conf-err">✗ Model not recommended — run more grid search tests</span>';
+  }
+
+  el.innerHTML = `
+    <div class="model-result-panel">
+      <div class="model-result-header">
+        <span>Trained: ${at}</span>
+        <span>${stats.n_total ?? '—'} rows (top 30% score)</span>
+      </div>
+      <div class="model-result-title">Prediction Confidence (R² on test set)</div>
+      <div class="model-params-list">${rows}</div>
+      <div class="model-explanation-box">
+        <div class="model-explanation-title">What does this mean?</div>
+        <p>R² measures how well the model predicts optimal PID gains from conditions (L, m, wind). Higher = more confident.</p>
+        <div class="model-thresholds">
+          <div><span class="conf-ok">R² &gt; 0.75</span> &nbsp;● Ready for AI DRIVEN</div>
+          <div><span class="conf-warn">R² 0.50–0.75</span> &nbsp;⚠ Approximate — collect more data</div>
+          <div><span class="conf-err">R² &lt; 0.50</span> &nbsp;✗ Not recommended — run more PID tests</div>
+        </div>
+      </div>
+      <div class="model-range-info">Training data range:
+        L: ${dr.L_min ?? '?'}–${dr.L_max ?? '?'} m &nbsp;|&nbsp;
+        m: ${dr.m_min ?? '?'}–${dr.m_max ?? '?'} kg &nbsp;|&nbsp;
+        wind: 0–${dr.wind_max ?? '?'} m/s
+      </div>
+      <div class="model-recommendation">${recommendation}</div>
+    </div>`;
 }
 
 async function buildModel() {

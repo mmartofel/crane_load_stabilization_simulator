@@ -70,7 +70,14 @@ class PIDPredictor:
             'n_total':         int(len(df)),
             'score_threshold': None,
             'metrics':         stats,
-            'trained_at':      datetime.utcnow().isoformat() + 'Z'
+            'trained_at':      datetime.utcnow().isoformat() + 'Z',
+            'data_range': {
+                'L_min':    round(float(df['L'].min()), 2),
+                'L_max':    round(float(df['L'].max()), 2),
+                'm_min':    round(float(df['m'].min()), 2),
+                'm_max':    round(float(df['m'].max()), 2),
+                'wind_max': round(float(df['wind_speed'].max()), 2),
+            }
         }
         self.is_trained = True
         joblib.dump({'models': self.models, 'stats': self.training_stats},
@@ -97,10 +104,22 @@ class PIDPredictor:
         result = {}
         for t in self.TARGET_COLS:
             result[t] = round(max(float(self.models[t].predict(row)[0]), 0.0), 4)
-        r2s = [self.training_stats['metrics'][t]['r2'] for t in self.TARGET_COLS]
-        result['confidence'] = round(float(np.mean(r2s)), 3)
-        result['model']      = 'GradientBoosting'
-        result['fallback']   = False
+        r2_kp = self.training_stats['metrics']['Kp']['r2']
+        r2_ki = self.training_stats['metrics']['Ki']['r2']
+        r2_kd = self.training_stats['metrics']['Kd']['r2']
+        mean_conf = float(np.mean([r2_kp, r2_ki, r2_kd]))
+        result['confidence']        = round(mean_conf, 3)
+        result['confidence_detail'] = {
+            'Kp': round(r2_kp, 3),
+            'Ki': round(r2_ki, 3),
+            'Kd': round(r2_kd, 3),
+        }
+        result['confidence_label']   = _confidence_label(mean_conf)
+        result['in_training_range']  = _check_training_range(
+            self.training_stats.get('data_range'), L, m)
+        result['confidence_hint']    = _confidence_hint(mean_conf, L, m)
+        result['model']              = 'GradientBoosting'
+        result['fallback']           = False
         return result
 
     def _fallback(self, L, m):
@@ -111,5 +130,52 @@ class PIDPredictor:
             'Kp': round(min(kpc * 0.55, 18), 2),
             'Ki': round(0.1 / max(L / 10, 0.1), 3),
             'Kd': round(T * 0.4, 2),
-            'confidence': 0.0, 'model': 'analytical_fallback', 'fallback': True
+            'confidence':        0.0,
+            'confidence_detail': {'Kp': 0.0, 'Ki': 0.0, 'Kd': 0.0},
+            'confidence_label':  'FALLBACK',
+            'in_training_range': None,
+            'confidence_hint':   (
+                f'No trained model available. Using analytical formulas. '
+                f'Run PID tests for L≈{L:.0f}m, m≈{m:.0f}kg and build the model.'
+            ),
+            'model':   'analytical_fallback',
+            'fallback': True
         }
+
+
+# ── Module-level confidence helper functions ──────────────────────────────────
+
+def _confidence_label(conf: float) -> str:
+    if conf < 0.50: return 'FALLBACK'
+    if conf < 0.75: return 'LOW'
+    if conf < 0.90: return 'HIGH'
+    return 'VERY HIGH'
+
+
+def _check_training_range(data_range: dict | None, L: float, m: float):
+    """Return True if L and m are within ±20% of the training data range."""
+    if not data_range:
+        return None
+    try:
+        L_ok = data_range['L_min'] * 0.8 <= L <= data_range['L_max'] * 1.2
+        m_ok = data_range['m_min'] * 0.8 <= m <= data_range['m_max'] * 1.2
+        return bool(L_ok and m_ok)
+    except Exception:
+        return None
+
+
+def _confidence_hint(conf: float, L: float, m: float) -> str | None:
+    """Return a user-facing hint when confidence is below 0.75, else None."""
+    if conf >= 0.75:
+        return None
+    if conf < 0.50:
+        return (
+            f'Model has no data for these conditions. '
+            f'Prediction is based on analytical formulas. '
+            f'Collect more PID test results for L≈{L:.0f}m, m≈{m:.0f}kg.'
+        )
+    return (
+        f'Model has limited data for L≈{L:.0f}m, m≈{m:.0f}kg. '
+        f'Prediction is approximate. Consider running additional grid search '
+        f'tests in this parameter range.'
+    )
