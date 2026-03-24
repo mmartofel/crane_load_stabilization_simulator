@@ -10,8 +10,8 @@ import joblib, os, json
 from datetime import datetime
 
 class PIDPredictor:
-    MODEL_PATH  = "pid_model.joblib"
-    META_PATH   = "../data/model_meta.json"
+    MODEL_PATH  = "model.joblib"
+    META_PATH   = "../data/experiments/model_dataset_manual/model_metadata.json"
     FEATURE_COLS = ['L', 'm', 'wind_speed', 'wind_dir_sin', 'wind_dir_cos',
                     'omega0', 'T_period']
     TARGET_COLS  = ['Kp', 'Ki', 'Kd']

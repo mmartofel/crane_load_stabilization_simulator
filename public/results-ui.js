@@ -1321,7 +1321,11 @@ async function buildModel() {
     const resp = await fetch('/api/ai/train', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ csv_path: '../data/test_results.csv' })
+      body: JSON.stringify({
+        csv_path:      '../data/experiments/model_dataset_manual/model_data.csv',
+        output_dir:    '../data/experiments/model_dataset_manual',
+        meta_filename: 'model_metadata.json',
+      })
     });
     const data = await resp.json();
     clearInterval(iv);

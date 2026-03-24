@@ -5,9 +5,24 @@ const path = require('path');
 const EXPERIMENTS_DIR = path.join(__dirname, '..', 'data', 'experiments');
 fs.mkdirSync(EXPERIMENTS_DIR, { recursive: true });
 
-const ALLOWED = ['dataset_A_fallback', 'dataset_B_low', 'dataset_C_high'];
+const ALLOWED = ['model_dataset_fallback', 'model_dataset_low', 'model_dataset_high'];
+
+const GENERATOR_MODES_FILE = path.join(EXPERIMENTS_DIR, 'generator_modes.json');
 
 module.exports = function registerExperimentsAPI(app) {
+
+  // GET /api/generator-modes
+  // Return the generator mode configuration from the JSON file
+  app.get('/api/generator-modes', (req, res) => {
+    if (!fs.existsSync(GENERATOR_MODES_FILE)) {
+      return res.status(404).json({ error: 'generator_modes.json not found' });
+    }
+    try {
+      res.json(JSON.parse(fs.readFileSync(GENERATOR_MODES_FILE, 'utf8')));
+    } catch (e) {
+      res.status(500).json({ error: 'Failed to read generator_modes.json', detail: e.message });
+    }
+  });
 
   // POST /api/experiments/:name/data
   // Save records as CSV for an experiment (overwrite or append)
@@ -22,7 +37,7 @@ module.exports = function registerExperimentsAPI(app) {
 
     const dir     = path.join(EXPERIMENTS_DIR, name);
     fs.mkdirSync(dir, { recursive: true });
-    const csvPath = path.join(dir, 'pid_results.csv');
+    const csvPath = path.join(dir, 'model_data.csv');
 
     const header = Object.keys(records[0]).join(',');
     const rows   = records.map(r =>
@@ -51,7 +66,7 @@ module.exports = function registerExperimentsAPI(app) {
     const dir = path.join(EXPERIMENTS_DIR, name);
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(
-      path.join(dir, 'generation_log.json'),
+      path.join(dir, 'model_generation_log.json'),
       JSON.stringify(req.body, null, 2)
     );
     res.json({ saved: true });
@@ -62,9 +77,9 @@ module.exports = function registerExperimentsAPI(app) {
   app.get('/api/experiments', (req, res) => {
     const result = ALLOWED.map(name => {
       const dir      = path.join(EXPERIMENTS_DIR, name);
-      const csvPath  = path.join(dir, 'pid_results.csv');
-      const metaPath = path.join(dir, 'model_meta.json');
-      const logPath  = path.join(dir, 'generation_log.json');
+      const csvPath  = path.join(dir, 'model_data.csv');
+      const metaPath = path.join(dir, 'model_metadata.json');
+      const logPath  = path.join(dir, 'model_generation_log.json');
 
       let rowCount = 0;
       if (fs.existsSync(csvPath)) {
@@ -118,7 +133,7 @@ module.exports = function registerExperimentsAPI(app) {
       return res.status(400).json({ error: `Invalid name: ${name}` });
 
     const modelPath = path.join(EXPERIMENTS_DIR, name, 'model.joblib');
-    const metaPath  = path.join(EXPERIMENTS_DIR, name, 'model_meta.json');
+    const metaPath  = path.join(EXPERIMENTS_DIR, name, 'model_metadata.json');
 
     if (!fs.existsSync(modelPath)) {
       return res.status(404).json({

@@ -5,7 +5,7 @@ package-lock.json
 .venv
 __pycache__
 session_*
-# model_meta.json
+model_metadata.json
 *.joblib
-generation_log.json
+model_generation_log.json
 model_meta.json

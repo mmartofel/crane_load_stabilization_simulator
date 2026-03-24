@@ -22,13 +22,13 @@ class PredictRequest(BaseModel):
     use_ollama_explanation: bool  = Field(False)
 
 class TrainRequest(BaseModel):
-    csv_path:       str            = Field("../data/test_results.csv")
+    csv_path:       str            = Field("../data/experiments/model_dataset_manual/model_data.csv")
     output_dir:     Optional[str]  = None   # if set, save model/meta here
     model_filename: str            = "model.joblib"
-    meta_filename:  str            = "model_meta.json"
+    meta_filename:  str            = "model_metadata.json"
 
 class SwitchExperimentRequest(BaseModel):
-    experiment: str  # e.g. "dataset_A_fallback"
+    experiment: str  # e.g. "model_dataset_fallback"
 
 @app.post("/predict")
 async def predict(req: PredictRequest):

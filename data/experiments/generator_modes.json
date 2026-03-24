@@ -1,0 +1,58 @@
+{
+  "fallback": {
+    "id":           "model_dataset_fallback",
+    "label":        "FALLBACK",
+    "description":  "Very little data, narrow parameter range. Expected R² < 0.50. Shows AI behavior without sufficient training data.",
+    "color":        "var(--red)",
+    "bgColor":      "rgba(255,68,68,0.12)",
+    "expected_r2":  "< 0.50",
+    "L_values":     [3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0],
+    "m_values":     [2.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 50.0, 100.0, 150.0, 200.0, 250.0, 300.0, 370.0, 420.0, 470.0, 500.0],
+    "Kp_steps": 5,  "Kp_min": 2.0,  "Kp_max": 14.0,
+    "Ki_steps": 3,  "Ki_min": 0.0,  "Ki_max": 0.2,
+    "Kd_steps": 5,  "Kd_min": 0.5,  "Kd_max": 5.0,
+    "wind_configs": [
+      { "speed": 3.0,  "dir_deg": 0,   "disturbance_type": "step"    },
+      { "speed": 6.0,  "dir_deg": 90,  "disturbance_type": "gust"    },
+      { "speed": 10.0, "dir_deg": 180, "disturbance_type": "ramp"    },
+      { "speed": 14.0, "dir_deg": 315, "disturbance_type": "impulse" }
+    ]
+  },
+  "low": {
+    "id":           "model_dataset_low",
+    "label":        "LOW",
+    "description":  "Medium amount of data, limited parameter range. Expected R² 0.50–0.75. Shows AI with partial data coverage.",
+    "color":        "var(--warn)",
+    "bgColor":      "var(--warn-dim)",
+    "expected_r2":  "0.50–0.75",
+    "L_values":     [5.0, 10.0, 15.0, 20.0],
+    "m_values":     [2.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 50.0, 100.0, 150.0, 200.0, 250.0, 300.0, 370.0, 420.0, 470.0, 500.0],
+    "Kp_steps": 6,  "Kp_min": 0.0,  "Kp_max": 60.0,
+    "Ki_steps": 10, "Ki_min": 0.0,  "Ki_max": 20.0,
+    "Kd_steps": 6,  "Kd_min": 0.0,  "Kd_max": 20.0,
+    "wind_configs": [
+      { "speed": 4.0,  "dir_deg": 45,  "disturbance_type": "step" },
+      { "speed": 8.0,  "dir_deg": 135, "disturbance_type": "gust" },
+      { "speed": 12.0, "dir_deg": 270, "disturbance_type": "ramp" }
+    ]
+  },
+  "high": {
+    "id":           "model_dataset_high",
+    "label":        "HIGH",
+    "description":  "Large dataset with full parameter coverage. Expected R² > 0.75. Production-quality model for AI DRIVEN.",
+    "color":        "var(--accent)",
+    "bgColor":      "var(--accent-dim)",
+    "expected_r2":  "> 0.75",
+    "L_values":     [3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0],
+    "m_values":     [2.0, 5.0, 10.0, 20.0, 30.0, 50.0, 70.0, 100.0, 120.0, 150.0, 180.0, 200.0, 250.0, 300.0, 370.0, 420.0, 470.0, 500.0],
+    "Kp_steps": 5,  "Kp_min": 0.0,  "Kp_max": 600.0,
+    "Ki_steps": 5,  "Ki_min": 0.0,  "Ki_max": 200.0,
+    "Kd_steps": 5,  "Kd_min": 0.0,  "Kd_max": 200.0,
+    "wind_configs": [
+      { "speed": 3.0,  "dir_deg": 0,   "disturbance_type": "step"    },
+      { "speed": 6.0,  "dir_deg": 90,  "disturbance_type": "gust"    },
+      { "speed": 10.0, "dir_deg": 180, "disturbance_type": "ramp"    },
+      { "speed": 14.0, "dir_deg": 315, "disturbance_type": "impulse" }
+    ]
+  }
+}

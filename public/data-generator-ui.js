@@ -3,85 +3,35 @@
 // via a headless physics Web Worker and saves them to the server.
 
 // ── Mode definitions ────────────────────────────────────────────────────────
-// Each mode specifies grid parameters that determine dataset size and coverage.
-const GENERATOR_MODES = {
-  fallback: {
-    id:           'dataset_A_fallback',
-    label:        'FALLBACK',
-    description:  'Very little data, narrow parameter range. Expected R² < 0.50. Shows AI behavior without sufficient training data.',
-    color:        'var(--red)',
-    bgColor:      'rgba(255,68,68,0.12)',
-    expected_r2:  '< 0.50',
-    L_values:     [3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0],
-    m_values:     [2.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 50.0, 100.0, 150.0, 200.0, 250.0, 300.0, 370.0, 420.0, 470.0, 500.0],
-    Kp_steps: 5,  Kp_min: 2.0,  Kp_max: 14.0,
-    Ki_steps: 3,  Ki_min: 0.0,  Ki_max: 0.2,
-    Kd_steps: 5,  Kd_min: 0.5,  Kd_max: 5.0,
-    wind_configs: [
-      { speed: 3.0,  dir_deg: 0,   disturbance_type: 'step'    },
-      { speed: 6.0,  dir_deg: 90,  disturbance_type: 'gust'    },
-      { speed: 10.0, dir_deg: 180, disturbance_type: 'ramp'    },
-      { speed: 14.0, dir_deg: 315, disturbance_type: 'impulse' },
-    ],
-    get total_tests() {
-      return this.L_values.length * this.m_values.length *
-             this.Kp_steps * this.Ki_steps * this.Kd_steps *
-             this.wind_configs.length;
-    },
-    get est_minutes() { return Math.round(this.total_tests * 0.003 / 60 * 10) / 10; },
-  },
+// Loaded at runtime from /api/generator-modes (data/experiments/generator_modes.json).
+// The computed properties total_tests and est_minutes are added by enrichMode().
+let GENERATOR_MODES = null;
 
-  low: {
-    id:           'dataset_B_low',
-    label:        'LOW',
-    description:  'Medium amount of data, limited parameter range. Expected R² 0.50–0.75. Shows AI with partial data coverage.',
-    color:        'var(--warn)',
-    bgColor:      'var(--warn-dim)',
-    expected_r2:  '0.50–0.75',
-    L_values:     [5.0, 10.0, 15.0, 20.0],
-    m_values:     [2.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 50.0, 100.0, 150.0, 200.0, 250.0, 300.0, 370.0, 420.0, 470.0, 500.0],
-    Kp_steps: 6,  Kp_min: 0.0,  Kp_max: 60.0,
-    Ki_steps: 10,  Ki_min: 0.0,  Ki_max: 20.0,
-    Kd_steps: 6,  Kd_min: 0.0,  Kd_max: 20.0,
-    wind_configs: [
-      { speed: 4.0,  dir_deg: 45,  disturbance_type: 'step'    },
-      { speed: 8.0,  dir_deg: 135, disturbance_type: 'gust'    },
-      { speed: 12.0, dir_deg: 270, disturbance_type: 'ramp'    },
-    ],
-    get total_tests() {
+function enrichMode(mode) {
+  Object.defineProperty(mode, 'total_tests', {
+    get() {
       return this.L_values.length * this.m_values.length *
              this.Kp_steps * this.Ki_steps * this.Kd_steps *
              this.wind_configs.length;
     },
-    get est_minutes() { return Math.round(this.total_tests * 0.003 / 60 * 10) / 10; },
-  },
+    configurable: true,
+  });
+  Object.defineProperty(mode, 'est_minutes', {
+    get() { return Math.round(this.total_tests * 0.003 / 60 * 10) / 10; },
+    configurable: true,
+  });
+  return mode;
+}
 
-  high: {
-    id:           'dataset_C_high',
-    label:        'HIGH',
-    description:  'Large dataset with full parameter coverage. Expected R² > 0.75. Production-quality model for AI DRIVEN.',
-    color:        'var(--accent)',
-    bgColor:      'var(--accent-dim)',
-    expected_r2:  '> 0.75',
-    L_values:     [3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0],
-    m_values:     [2.0, 5.0, 10.0, 20.0, 30.0, 50.0, 70.0, 100.0, 120.0, 150.0, 180.0, 200.0, 250.0, 300.0, 370.0, 420.0, 470.0, 500.0],
-    Kp_steps: 5,  Kp_min: 0.0,  Kp_max: 600.0,
-    Ki_steps: 5,  Ki_min: 0.0,  Ki_max: 200.0,
-    Kd_steps: 5,  Kd_min: 0.0,  Kd_max: 200.0,
-    wind_configs: [
-      { speed: 3.0,  dir_deg: 0,   disturbance_type: 'step'    },
-      { speed: 6.0,  dir_deg: 90,  disturbance_type: 'gust'    },
-      { speed: 10.0, dir_deg: 180, disturbance_type: 'ramp'    },
-      { speed: 14.0, dir_deg: 315, disturbance_type: 'impulse' },
-    ],
-    get total_tests() {
-      return this.L_values.length * this.m_values.length *
-             this.Kp_steps * this.Ki_steps * this.Kd_steps *
-             this.wind_configs.length;
-    },
-    get est_minutes() { return Math.round(this.total_tests * 0.003 / 60 * 10) / 10; },
-  },
-};
+async function loadGeneratorModes() {
+  const resp = await fetch('/api/generator-modes');
+  if (!resp.ok) throw new Error(`Failed to load generator modes: ${resp.status}`);
+  const data = await resp.json();
+  GENERATOR_MODES = {};
+  for (const [key, mode] of Object.entries(data)) {
+    GENERATOR_MODES[key] = enrichMode(mode);
+  }
+}
 
 // ── DataGeneratorUI class ───────────────────────────────────────────────────
 class DataGeneratorUI {
@@ -96,6 +46,7 @@ class DataGeneratorUI {
   }
 
   async init() {
+    await loadGeneratorModes();
     this.renderModeSelector();
     this._bindAdvancedPanel();
     await this.refreshExperimentsState();
@@ -372,9 +323,9 @@ class DataGeneratorUI {
     if (!container) return;
 
     const entries = [
-      { key: 'dataset_A_fallback', label: 'A — FALLBACK', colorClass: 'danger'  },
-      { key: 'dataset_B_low',      label: 'B — LOW',      colorClass: 'warning' },
-      { key: 'dataset_C_high',     label: 'C — HIGH',     colorClass: 'success' },
+      { key: 'model_dataset_fallback', label: 'A — FALLBACK', colorClass: 'danger'  },
+      { key: 'model_dataset_low',      label: 'B — LOW',      colorClass: 'warning' },
+      { key: 'model_dataset_high',     label: 'C — HIGH',     colorClass: 'success' },
     ];
 
     container.innerHTML = entries.map(e => {
@@ -422,7 +373,7 @@ class DataGeneratorUI {
     const btn = evt?.currentTarget ?? evt?.target;
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Training...'; }
 
-    const csvPath   = `../data/experiments/${datasetId}/pid_results.csv`;
+    const csvPath   = `../data/experiments/${datasetId}/model_data.csv`;
     const outputDir = `../data/experiments/${datasetId}`;
 
     try {
@@ -433,7 +384,7 @@ class DataGeneratorUI {
           csv_path:       csvPath,
           output_dir:     outputDir,
           model_filename: 'model.joblib',
-          meta_filename:  'model_meta.json',
+          meta_filename:  'model_metadata.json',
         }),
       });
       const data = await resp.json();
@@ -532,7 +483,7 @@ class DataGeneratorUI {
     if (!bar) return;
     // Find which experiment is active from experiments_config.json via any has_model flag
     // We don't have a direct API for this, so show the highest-quality built model
-    const ranked = ['dataset_C_high', 'dataset_B_low', 'dataset_A_fallback'];
+    const ranked = ['model_dataset_high', 'model_dataset_low', 'model_dataset_fallback'];
     for (const name of ranked) {
       const e = this.experiments[name];
       if (e?.has_model && e.model_meta) {

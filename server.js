@@ -8,7 +8,7 @@ const app  = express();
 const PORT = 3000;
 
 const SESSIONS_DIR = path.join(__dirname, 'data', 'ai_sessions');
-const MODEL_META   = path.join(__dirname, 'data', 'model_meta.json');
+const MODEL_META   = path.join(__dirname, 'data', 'experiments', 'model_dataset_manual', 'model_metadata.json');
 fs.mkdirSync(SESSIONS_DIR, { recursive: true });
 
 app.use(express.json({ limit: '50mb' }));
@@ -74,7 +74,7 @@ app.get('/api/ai/status', async (req, res) => {
     const r = await fetch('http://localhost:8000/status',
       { signal: AbortSignal.timeout(2000) });
     const data = await r.json();
-    // Attach model_meta.json if available
+    // Attach model_metadata.json if available
     if (fs.existsSync(MODEL_META)) {
       data.meta = JSON.parse(fs.readFileSync(MODEL_META, 'utf8'));
     }
@@ -127,7 +127,7 @@ app.delete('/api/sessions/:id', (req, res) => {
 // ── CSV ROW COUNT (used by BUILD MODEL button) ────────────────────────────
 
 app.get('/api/csv-stats', (req, res) => {
-  const csvPath = path.join(__dirname, 'data', 'test_results.csv');
+  const csvPath = path.join(__dirname, 'data', 'experiments', 'model_dataset_manual', 'model_data.csv');
   if (!fs.existsSync(csvPath)) return res.json({ rows: 0, exists: false });
   const content = fs.readFileSync(csvPath, 'utf8');
   const rows    = content.split('\n').filter(l => l.trim()).length - 1; // minus header
