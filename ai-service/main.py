@@ -1,9 +1,11 @@
-# main.py — FastAPI AI service: /predict /train /status
+# main.py — FastAPI AI service: /predict /train /status /switch-experiment
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from typing import Optional
 from model import PIDPredictor
-import os, requests
+import os, json, joblib, requests
+from pathlib import Path
 
 app = FastAPI(title="Crane PID AI Service")
 app.add_middleware(CORSMiddleware, allow_origins=["*"],
@@ -20,7 +22,13 @@ class PredictRequest(BaseModel):
     use_ollama_explanation: bool  = Field(False)
 
 class TrainRequest(BaseModel):
-    csv_path: str = Field("../data/test_results.csv")
+    csv_path:       str            = Field("../data/test_results.csv")
+    output_dir:     Optional[str]  = None   # if set, save model/meta here
+    model_filename: str            = "model.joblib"
+    meta_filename:  str            = "model_meta.json"
+
+class SwitchExperimentRequest(BaseModel):
+    experiment: str  # e.g. "dataset_A_fallback"
 
 @app.post("/predict")
 async def predict(req: PredictRequest):
@@ -57,10 +65,43 @@ async def train(req: TrainRequest):
     if not os.path.exists(req.csv_path):
         raise HTTPException(404, f"File not found: {req.csv_path}")
     try:
-        stats = predictor.train(req.csv_path)
+        # Build optional output paths for experiment-specific model saving
+        model_path = None
+        meta_path  = None
+        if req.output_dir:
+            os.makedirs(req.output_dir, exist_ok=True)
+            model_path = os.path.join(req.output_dir, req.model_filename)
+            meta_path  = os.path.join(req.output_dir, req.meta_filename)
+        stats = predictor.train(req.csv_path, model_path=model_path, meta_path=meta_path)
         return {"status": "ok", "stats": stats}
     except ValueError as e:
         raise HTTPException(400, str(e))
+
+@app.post("/switch-experiment")
+async def switch_experiment(req: SwitchExperimentRequest):
+    """Load a previously trained experiment model into the active predictor."""
+    config_path = Path(__file__).parent / "experiments_config.json"
+    if not config_path.exists():
+        raise HTTPException(404, "experiments_config.json not found — activate an experiment first")
+    try:
+        config = json.loads(config_path.read_text())
+    except Exception as e:
+        raise HTTPException(500, f"Failed to read experiments_config.json: {e}")
+
+    model_path = config.get("model_path")
+    meta_path  = config.get("meta_path")
+    if not model_path or not os.path.exists(model_path):
+        raise HTTPException(404, f"Model file not found: {model_path}")
+
+    try:
+        data = joblib.load(model_path)
+        predictor.models         = data["models"]
+        predictor.training_stats = data["stats"]
+        predictor.is_trained     = True
+        meta = json.loads(Path(meta_path).read_text()) if meta_path and os.path.exists(meta_path) else {}
+        return {"status": "ok", "active_experiment": config.get("active_experiment"), "stats": meta}
+    except Exception as e:
+        raise HTTPException(500, f"Failed to load model: {e}")
 
 @app.get("/status")
 async def status():

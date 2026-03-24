@@ -39,7 +39,12 @@ class PIDPredictor:
         df['wind_dir_cos'] = np.cos(rad)
         return df
 
-    def train(self, csv_path: str) -> dict:
+    def train(self, csv_path: str,
+              model_path: str = None, meta_path: str = None) -> dict:
+        # Allow saving model/meta to a custom location (used by DATA GENERATOR)
+        save_model = model_path or self.MODEL_PATH
+        save_meta  = meta_path  or self.META_PATH
+
         df = pd.read_csv(csv_path)
         df = df[df['status'] == 'ok']
         if len(df) < 10:
@@ -66,10 +71,16 @@ class PIDPredictor:
                 'n_test':  int(len(X_te))
             }
             self.models[target] = pipe
+
+        avg_r2 = round(float(
+            sum(stats[t]['r2'] for t in self.TARGET_COLS) / len(self.TARGET_COLS)
+        ), 4)
         self.training_stats = {
             'n_total':         int(len(df)),
             'score_threshold': None,
             'metrics':         stats,
+            'avg_r2':          avg_r2,
+            'confidence_label': _confidence_label(avg_r2),
             'trained_at':      datetime.utcnow().isoformat() + 'Z',
             'data_range': {
                 'L_min':    round(float(df['L'].min()), 2),
@@ -80,11 +91,12 @@ class PIDPredictor:
             }
         }
         self.is_trained = True
-        joblib.dump({'models': self.models, 'stats': self.training_stats},
-                    self.MODEL_PATH)
+        joblib.dump({'models': self.models, 'stats': self.training_stats}, save_model)
         # Write metadata for frontend consumption
-        os.makedirs(os.path.dirname(self.META_PATH), exist_ok=True)
-        with open(self.META_PATH, 'w') as f:
+        meta_dir = os.path.dirname(save_meta)
+        if meta_dir:
+            os.makedirs(meta_dir, exist_ok=True)
+        with open(save_meta, 'w') as f:
             json.dump(self.training_stats, f, indent=2)
         return self.training_stats
 

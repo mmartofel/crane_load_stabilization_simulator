@@ -2,6 +2,7 @@ const express = require('express');
 const path    = require('path');
 const fs      = require('fs');
 const resultsApi = require('./server/results-api');
+const registerExperimentsAPI = require('./server/experiments-api');
 
 const app  = express();
 const PORT = 3000;
@@ -12,6 +13,9 @@ fs.mkdirSync(SESSIONS_DIR, { recursive: true });
 
 app.use(express.json({ limit: '50mb' }));
 app.use('/api/results', resultsApi);
+
+// ── EXPERIMENTS API (DATA GENERATOR) ─────────────────────────────────────
+registerExperimentsAPI(app);
 
 // ── PROXY TO AI SERVICE (Python FastAPI :8000) ────────────────────────────
 
@@ -44,6 +48,20 @@ app.post('/api/ai/train', async (req, res) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req.body)
+    });
+    res.json(await r.json());
+  } catch (e) {
+    res.status(503).json({ error: 'AI service unavailable', detail: e.message });
+  }
+});
+
+app.post('/api/ai/switch-experiment', async (req, res) => {
+  try {
+    const r = await fetch('http://localhost:8000/switch-experiment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body),
+      signal: AbortSignal.timeout(5000)
     });
     res.json(await r.json());
   } catch (e) {

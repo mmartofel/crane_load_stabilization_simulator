@@ -1,0 +1,6 @@
+{
+  "active_experiment": "dataset_A_fallback",
+  "updated_at": "2026-03-24T20:09:43.577Z",
+  "model_path": "/Users/mmartofe/tmp/DZWIK/crane-simulator/data/experiments/dataset_A_fallback/model.joblib",
+  "meta_path": "/Users/mmartofe/tmp/DZWIK/crane-simulator/data/experiments/dataset_A_fallback/model_meta.json"
+}

@@ -6,4 +6,6 @@ package-lock.json
 __pycache__
 session_*
 # model_meta.json
-# pid_model.joblib
+*.joblib
+generation_log.json
+model_meta.json
