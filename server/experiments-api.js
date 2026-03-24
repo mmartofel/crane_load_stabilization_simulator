@@ -5,7 +5,7 @@ const path = require('path');
 const EXPERIMENTS_DIR = path.join(__dirname, '..', 'data', 'experiments');
 fs.mkdirSync(EXPERIMENTS_DIR, { recursive: true });
 
-const ALLOWED = ['model_dataset_fallback', 'model_dataset_low', 'model_dataset_high'];
+const ALLOWED = ['model_dataset_fallback', 'model_dataset_low', 'model_dataset_high', 'model_dataset_manual'];
 
 const GENERATOR_MODES_FILE = path.join(EXPERIMENTS_DIR, 'generator_modes.json');
 
@@ -21,6 +21,32 @@ module.exports = function registerExperimentsAPI(app) {
       res.json(JSON.parse(fs.readFileSync(GENERATOR_MODES_FILE, 'utf8')));
     } catch (e) {
       res.status(500).json({ error: 'Failed to read generator_modes.json', detail: e.message });
+    }
+  });
+
+  // GET /api/active-experiment
+  // Return the currently active experiment from experiments_config.json
+  app.get('/api/active-experiment', (req, res) => {
+    const configPath = path.join(__dirname, '..', 'ai-service', 'experiments_config.json');
+    if (!fs.existsSync(configPath)) {
+      return res.json({ active_experiment: null });
+    }
+    try {
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      let avg_r2 = null, confidence_label = null;
+      if (config.meta_path && fs.existsSync(config.meta_path)) {
+        const meta = JSON.parse(fs.readFileSync(config.meta_path, 'utf8'));
+        avg_r2           = meta.avg_r2           ?? null;
+        confidence_label = meta.confidence_label ?? null;
+      }
+      res.json({
+        active_experiment: config.active_experiment ?? null,
+        updated_at:        config.updated_at        ?? null,
+        avg_r2,
+        confidence_label,
+      });
+    } catch (e) {
+      res.status(500).json({ error: 'Failed to read active experiment config', detail: e.message });
     }
   });
 

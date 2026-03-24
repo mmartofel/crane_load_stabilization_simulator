@@ -40,6 +40,7 @@ class DataGeneratorUI {
     this.activeWorker = null;
     this.isGenerating = false;
     this.experiments  = {};     // state of A/B/C fetched from /api/experiments
+    this.activeConfig = null;   // mirrors ai-service/experiments_config.json
     this.batchBuffer  = [];
     this.BATCH_SIZE   = 500;    // chunk size for HTTP saves
     this.startTime    = null;
@@ -316,6 +317,11 @@ class DataGeneratorUI {
       this.experiments = {};
       list.forEach(e => { this.experiments[e.name] = e; });
     } catch { /* server may not be ready yet */ }
+
+    try {
+      const resp = await fetch('/api/active-experiment');
+      if (resp.ok) this.activeConfig = await resp.json();
+    } catch { /* server may not be ready yet */ }
   }
 
   renderDatasetStatusCards() {
@@ -481,19 +487,23 @@ class DataGeneratorUI {
   _renderActiveModelBar() {
     const bar = document.getElementById('dg-active-model-bar');
     if (!bar) return;
-    // Find which experiment is active from experiments_config.json via any has_model flag
-    // We don't have a direct API for this, so show the highest-quality built model
-    const ranked = ['model_dataset_high', 'model_dataset_low', 'model_dataset_fallback'];
-    for (const name of ranked) {
-      const e = this.experiments[name];
-      if (e?.has_model && e.model_meta) {
-        const r2    = (e.model_meta.avg_r2 ?? 0).toFixed(2);
-        const label = e.model_meta.confidence_label ?? '';
-        bar.innerHTML = `Active model: <strong>${name}</strong> &nbsp;|&nbsp; R²=${r2} ${label}`;
-        return;
-      }
+
+    const cfg = this.activeConfig;
+    if (!cfg?.active_experiment) {
+      bar.innerHTML = 'No model active — generate and build a dataset to enable AI DRIVEN.';
+      return;
     }
-    bar.innerHTML = 'No model active — generate and build a dataset to enable AI DRIVEN.';
+
+    const r2    = cfg.avg_r2 != null ? cfg.avg_r2.toFixed(2) : '—';
+    const label = cfg.confidence_label ?? '';
+    // Color the confidence dot by quality level
+    const dotColor = label === 'FALLBACK' ? 'var(--red)'
+                   : label === 'LOW'      ? 'var(--warn)'
+                   : 'var(--accent)';
+    bar.innerHTML =
+      `<span style="color:${dotColor}">●</span> ` +
+      `Active model: <strong>${cfg.active_experiment}</strong>` +
+      ` &nbsp;|&nbsp; R²=${r2} ${label}`;
   }
 
   showNotification(message, type) {

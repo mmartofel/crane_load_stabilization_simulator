@@ -1335,6 +1335,15 @@ async function buildModel() {
     if (data.status === 'ok') {
       updateModelPanel(data.stats);
       window.unlockAIDrivenTab();
+      // Activate the newly built manual model so experiments_config.json is updated
+      try {
+        await fetch('/api/experiments/model_dataset_manual/activate', { method: 'POST' });
+        await fetch('/api/ai/switch-experiment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ experiment: 'model_dataset_manual' }),
+        });
+      } catch { /* best-effort; training already succeeded */ }
     } else {
       throw new Error(data.detail || 'Unknown error');
     }

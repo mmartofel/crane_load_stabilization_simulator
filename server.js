@@ -7,8 +7,9 @@ const registerExperimentsAPI = require('./server/experiments-api');
 const app  = express();
 const PORT = 3000;
 
-const SESSIONS_DIR = path.join(__dirname, 'data', 'ai_sessions');
-const MODEL_META   = path.join(__dirname, 'data', 'experiments', 'model_dataset_manual', 'model_metadata.json');
+const SESSIONS_DIR  = path.join(__dirname, 'data', 'ai_sessions');
+const MODEL_META    = path.join(__dirname, 'data', 'experiments', 'model_dataset_manual', 'model_metadata.json');
+const EXPERIMENTS_CONFIG = path.join(__dirname, 'ai-service', 'experiments_config.json');
 fs.mkdirSync(SESSIONS_DIR, { recursive: true });
 
 app.use(express.json({ limit: '50mb' }));
@@ -74,9 +75,16 @@ app.get('/api/ai/status', async (req, res) => {
     const r = await fetch('http://localhost:8000/status',
       { signal: AbortSignal.timeout(2000) });
     const data = await r.json();
-    // Attach model_metadata.json if available
-    if (fs.existsSync(MODEL_META)) {
-      data.meta = JSON.parse(fs.readFileSync(MODEL_META, 'utf8'));
+    // Attach metadata from the active experiment (or fall back to model_dataset_manual)
+    let metaPath = MODEL_META;
+    if (fs.existsSync(EXPERIMENTS_CONFIG)) {
+      try {
+        const cfg = JSON.parse(fs.readFileSync(EXPERIMENTS_CONFIG, 'utf8'));
+        if (cfg.meta_path) metaPath = cfg.meta_path;
+      } catch {}
+    }
+    if (fs.existsSync(metaPath)) {
+      data.meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
     }
     res.json(data);
   } catch {
