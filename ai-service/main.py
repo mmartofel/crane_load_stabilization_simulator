@@ -26,6 +26,7 @@ class TrainRequest(BaseModel):
     output_dir:     Optional[str]  = None   # if set, save model/meta here
     model_filename: str            = "model.joblib"
     meta_filename:  str            = "model_metadata.json"
+    model_id:       Optional[str]  = None   # experiment/dataset identifier stored in metadata
 
 class SwitchExperimentRequest(BaseModel):
     experiment: str  # e.g. "model_dataset_fallback"
@@ -72,7 +73,8 @@ async def train(req: TrainRequest):
             os.makedirs(req.output_dir, exist_ok=True)
             model_path = os.path.join(req.output_dir, req.model_filename)
             meta_path  = os.path.join(req.output_dir, req.meta_filename)
-        stats = predictor.train(req.csv_path, model_path=model_path, meta_path=meta_path)
+        stats = predictor.train(req.csv_path, model_path=model_path, meta_path=meta_path,
+                                model_id=req.model_id)
         return {"status": "ok", "stats": stats}
     except ValueError as e:
         raise HTTPException(400, str(e))
@@ -106,10 +108,21 @@ async def switch_experiment(req: SwitchExperimentRequest):
 @app.get("/status")
 async def status():
     metrics = predictor.training_stats.get('metrics', {})
+    # Derive model_id: stored in stats (newer models) or fall back to experiments_config.json
+    model_id = predictor.training_stats.get('model_id', None)
+    if not model_id:
+        config_path = Path(__file__).parent / "experiments_config.json"
+        if config_path.exists():
+            try:
+                config = json.loads(config_path.read_text())
+                model_id = config.get("active_experiment")
+            except Exception:
+                pass
     return {
         "trained":           predictor.is_trained,
         "stats":             predictor.training_stats,
         "model_file_exists": os.path.exists(predictor.MODEL_PATH),
+        "model_id":          model_id,
         # Per-parameter R² for the Build Model panel in the frontend
         "r2_detail": {
             "Kp": metrics.get('Kp', {}).get('r2', None),

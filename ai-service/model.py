@@ -40,7 +40,8 @@ class PIDPredictor:
         return df
 
     def train(self, csv_path: str,
-              model_path: str = None, meta_path: str = None) -> dict:
+              model_path: str = None, meta_path: str = None,
+              model_id: str = None) -> dict:
         # Allow saving model/meta to a custom location (used by DATA GENERATOR)
         save_model = model_path or self.MODEL_PATH
         save_meta  = meta_path  or self.META_PATH
@@ -76,6 +77,7 @@ class PIDPredictor:
             sum(stats[t]['r2'] for t in self.TARGET_COLS) / len(self.TARGET_COLS)
         ), 4)
         self.training_stats = {
+            'model_id':        model_id,
             'n_total':         int(len(df)),
             'score_threshold': None,
             'metrics':         stats,
