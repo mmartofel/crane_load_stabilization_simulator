@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const router = express.Router();
-const CSV_PATH = path.join(__dirname, '..', 'data', 'test_results.csv');
+const CSV_PATH = path.join(__dirname, '..', 'data', 'experiments', 'model_dataset_manual', 'model_data.csv');
 const CSV_HEADER = 'timestamp,L,m,Kp,Ki,Kd,wind_speed,wind_dir_deg,disturbance_type,ISE,IAE,ITAE,t_settle,overshoot_deg,steady_state_error,score,status\n';
 
 function ensureCSV() {
@@ -63,7 +63,7 @@ router.get('/', (req, res) => {
 // GET /api/results/export
 router.get('/export', (req, res) => {
   ensureCSV();
-  res.setHeader('Content-Disposition', 'attachment; filename="test_results.csv"');
+  res.setHeader('Content-Disposition', 'attachment; filename="model_data.csv"');
   res.setHeader('Content-Type', 'text/csv');
   res.sendFile(CSV_PATH);
 });

@@ -325,10 +325,12 @@ class AIController {
       ? (this.metrics.sumTheta / this.metrics.frames) * (180 / Math.PI)
       : 0;
     return {
-      session_id:  `session_${Date.now()}`,
-      timestamp:   new Date().toISOString(),
-      scenario:    'crane_6min_v1',
-      duration_s:  360,
+      session_id:    `session_${Date.now()}`,
+      timestamp:     new Date().toISOString(),
+      scenario:      'crane_6min_v1',
+      duration_s:    360,
+      stabilizer_on: this.pidEnabled,   // final stabilizer state for REPORTS model info display
+      model_info:    capturedModelInfo, // AI service status snapshot taken at tab activation
       metrics: {
         avg_theta_deg:  +avgTheta.toFixed(3),
         max_theta_deg:  +(this.metrics.maxTheta * 180 / Math.PI).toFixed(3),
@@ -360,6 +362,7 @@ class AIController {
 
 const aiController = new AIController();
 let aiRenderer = null;
+let capturedModelInfo = null;   // snapshot of /api/ai/status stored at tab activation, embedded in session JSON
 let aiAnimRunning = false;
 let aiLastTime = null;
 let aiAccumulator = 0;
@@ -984,6 +987,31 @@ function drawAiAngleChart() {
 // Init & Event Wiring
 // ============================================================
 
+// Fetch AI service status and update the Model Status panel.
+// Called on every tab activation so the panel stays in sync with experiments_config.json.
+function refreshModelStatus() {
+  fetch('/api/ai/status').then(r => r.json()).then(data => {
+    capturedModelInfo = data;   // snapshot for embedding in the session JSON at scenario end
+    const modelName = data.model_id || (data.trained ? 'GradientBoosting' : 'analytical_fallback');
+    if (data.trained && data.stats?.metrics) {
+      const m = data.stats.metrics;
+      const conf = ((m.Kp?.r2 || 0) + (m.Ki?.r2 || 0) + (m.Kd?.r2 || 0)) / 3;
+      updateConfidencePanel({
+        model: modelName,
+        confidence: conf,
+        confidence_detail: { Kp: m.Kp?.r2 || 0, Ki: m.Ki?.r2 || 0, Kd: m.Kd?.r2 || 0 },
+        confidence_label: null, confidence_hint: null, in_training_range: null
+      });
+    } else {
+      updateConfidencePanel({ model: 'analytical_fallback', confidence: 0,
+        confidence_detail: {Kp:0, Ki:0, Kd:0}, confidence_label: 'FALLBACK',
+        confidence_hint: null, in_training_range: null });
+    }
+  }).catch(() => updateConfidencePanel({ model: 'analytical_fallback', confidence: 0,
+    confidence_detail: {Kp:0, Ki:0, Kd:0}, confidence_label: 'FALLBACK',
+    confidence_hint: null, in_training_range: null }));
+}
+
 function initAITab() {
   const mount = document.getElementById('ai-scene-mount');
   if (!mount || aiRenderer) return;
@@ -1075,25 +1103,6 @@ function initAITab() {
   updateDecisionHistoryUI([]);
   updateScenarioTimeUI(0);
 
-  // Check AI status to show model info
-  fetch('/api/ai/status').then(r => r.json()).then(data => {
-    if (data.trained && data.stats?.metrics) {
-      const m = data.stats.metrics;
-      const conf = ((m.Kp?.r2 || 0) + (m.Ki?.r2 || 0) + (m.Kd?.r2 || 0)) / 3;
-      updateConfidencePanel({
-        model: 'GradientBoosting',
-        confidence: conf,
-        confidence_detail: { Kp: m.Kp?.r2 || 0, Ki: m.Ki?.r2 || 0, Kd: m.Kd?.r2 || 0 },
-        confidence_label: null, confidence_hint: null, in_training_range: null
-      });
-    } else {
-      updateConfidencePanel({ model: 'analytical_fallback', confidence: 0,
-        confidence_detail: {Kp:0, Ki:0, Kd:0}, confidence_label: 'FALLBACK',
-        confidence_hint: null, in_training_range: null });
-    }
-  }).catch(() => updateConfidencePanel({ model: 'analytical_fallback', confidence: 0,
-    confidence_detail: {Kp:0, Ki:0, Kd:0}, confidence_label: 'FALLBACK',
-    confidence_hint: null, in_training_range: null }));
 }
 
 // Activate when tab is clicked
@@ -1101,6 +1110,8 @@ window.addEventListener('ai-tab-activated', () => {
   if (!aiRenderer) {
     initAITab();
   }
+  // Always refresh model status so the panel reflects the currently active experiment
+  refreshModelStatus();
   // Make sure the loop renders at least one frame
   if (!aiAnimRunning) {
     aiAnimRunning = true;

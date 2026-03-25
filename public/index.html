@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="results.css">
   <link rel="stylesheet" href="ai-ui.css">
   <link rel="stylesheet" href="reports-ui.css">
+  <link rel="stylesheet" href="data-generator-ui.css">
 </head>
 <body>
   <header id="app-toolbar">
@@ -18,7 +19,8 @@
     <nav id="tab-nav">
       <button id="tab-sim" class="tab-btn active">▶ SIMULATOR</button>
       <button id="tab-pid" class="tab-btn">📊 PID TESTS</button>
-      <button id="tab-ai-driven" class="tab-btn" disabled title="Build AI model first in PID TESTS tab">AI DRIVEN <span class="tab-lock">🔒</span></button>
+      <button id="tab-data-generator" class="tab-btn">⚙ DATA GENERATOR</button>
+      <button id="tab-ai-driven" class="tab-btn" disabled title="Build AI model first in PID TESTS or DATA GENERATOR tab">AI DRIVEN <span class="tab-lock">🔒</span></button>
       <button id="tab-reports" class="tab-btn">📋 REPORTS</button>
     </nav>
     <button id="btn-theme" class="toolbar-btn" title="Toggle dark/light mode">☀ LIGHT</button>
@@ -629,6 +631,110 @@
   </section>
 
   <!-- ============================================================
+       DATA GENERATOR SECTION
+       ============================================================ -->
+  <section id="data-generator-view" style="display:none">
+
+    <!-- Section A: Mode selector -->
+    <div class="dg-section">
+      <h3 class="dg-section-title">Dataset goal — choose generation mode</h3>
+      <div id="dg-mode-selector"></div>
+
+      <!-- Advanced collapsible panel -->
+      <button id="dg-advanced-toggle" class="dg-advanced-toggle">
+        ▶ Customize grid density (optional)
+      </button>
+      <div id="dg-advanced-body" style="display:none">
+        <div class="dg-adv-row">
+          <span class="dg-adv-label">Kp grid density</span>
+          <input id="dg-adv-kp-steps" class="dg-adv-slider"
+                 type="range" min="2" max="12" step="1" value="5">
+          <span id="dg-adv-kp-val" class="dg-adv-val">5 steps</span>
+        </div>
+        <div class="dg-adv-row">
+          <span class="dg-adv-label">Ki grid density</span>
+          <input id="dg-adv-ki-steps" class="dg-adv-slider"
+                 type="range" min="2" max="10" step="1" value="3">
+          <span id="dg-adv-ki-val" class="dg-adv-val">3 steps</span>
+        </div>
+        <div class="dg-adv-row">
+          <span class="dg-adv-label">Kd grid density</span>
+          <input id="dg-adv-kd-steps" class="dg-adv-slider"
+                 type="range" min="2" max="12" step="1" value="5">
+          <span id="dg-adv-kd-val" class="dg-adv-val">5 steps</span>
+        </div>
+        <p style="font-size:11px;color:var(--color-text-tertiary);margin:6px 0 0">
+          Sliders change grid density only; parameter ranges are fixed per mode.
+          Total test count updates in real time.
+        </p>
+      </div>
+    </div>
+
+    <!-- Section B: Config preview -->
+    <div class="dg-section">
+      <h3 class="dg-section-title">Configuration preview</h3>
+      <div class="dg-preview-grid">
+        <div>
+          <div id="dg-config-params"></div>
+        </div>
+        <div class="dg-estimate-box">
+          <div class="dg-estimate-label">Estimated time</div>
+          <div class="dg-estimate-time">~<span id="dg-preview-minutes">—</span> min</div>
+          <div id="dg-preview-bar-track">
+            <div id="dg-preview-bar" style="width:0%"></div>
+          </div>
+          <div class="dg-estimate-total">
+            Total: <strong><span id="dg-preview-total">—</span></strong> tests
+          </div>
+          <div class="dg-dataset-name" id="dg-preview-dataset">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section C: Generation controls + status -->
+    <div class="dg-section">
+      <h3 class="dg-section-title">Generate &amp; manage datasets</h3>
+
+      <!-- Action buttons -->
+      <div class="dg-controls-row">
+        <button id="dg-generate-btn" class="btn btn-primary"
+                onclick="dataGeneratorUI.startGeneration()">
+          ▶ GENERATE MODEL TRAINING DATASET
+        </button>
+        <button id="dg-stop-btn" class="btn btn-warning"
+                onclick="dataGeneratorUI.stopGeneration()"
+                style="display:none">
+          ■ STOP
+        </button>
+      </div>
+
+      <!-- Progress bar -->
+      <div id="dg-progress-bar-track">
+        <div id="dg-progress-bar"></div>
+      </div>
+      <div class="dg-progress-meta">
+        <span id="dg-progress-pct">0%</span>
+        <span id="dg-progress-done">0 / 0</span>
+        <span id="dg-progress-eta"></span>
+      </div>
+      <div id="dg-progress-current"></div>
+
+      <div class="dg-separator"></div>
+
+      <!-- Dataset A/B/C status cards -->
+      <div class="dg-status-title">Model status and actions</div>
+      <div id="dg-dataset-cards"></div>
+
+      <!-- Active model banner -->
+      <div id="dg-active-model-bar"></div>
+
+      <!-- Notification toast -->
+      <div id="dg-notification" class="dg-notification"></div>
+    </div>
+
+  </section>
+
+  <!-- ============================================================
        REPORTS SECTION
        ============================================================ -->
   <section id="reports-view" style="display:none">
@@ -754,5 +860,6 @@
   <script src="ai-scenario.js"></script>
   <script type="module" src="ai-ui.js"></script>
   <script type="module" src="reports-ui.js"></script>
+  <script type="module" src="data-generator-ui.js"></script>
 </body>
 </html>

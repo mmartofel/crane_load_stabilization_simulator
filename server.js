@@ -2,16 +2,21 @@ const express = require('express');
 const path    = require('path');
 const fs      = require('fs');
 const resultsApi = require('./server/results-api');
+const registerExperimentsAPI = require('./server/experiments-api');
 
 const app  = express();
 const PORT = 3000;
 
-const SESSIONS_DIR = path.join(__dirname, 'data', 'ai_sessions');
-const MODEL_META   = path.join(__dirname, 'data', 'model_meta.json');
+const SESSIONS_DIR  = path.join(__dirname, 'data', 'ai_sessions');
+const MODEL_META    = path.join(__dirname, 'data', 'experiments', 'model_dataset_manual', 'model_metadata.json');
+const EXPERIMENTS_CONFIG = path.join(__dirname, 'ai-service', 'experiments_config.json');
 fs.mkdirSync(SESSIONS_DIR, { recursive: true });
 
 app.use(express.json({ limit: '50mb' }));
 app.use('/api/results', resultsApi);
+
+// ── EXPERIMENTS API (DATA GENERATOR) ─────────────────────────────────────
+registerExperimentsAPI(app);
 
 // ── PROXY TO AI SERVICE (Python FastAPI :8000) ────────────────────────────
 
@@ -51,14 +56,35 @@ app.post('/api/ai/train', async (req, res) => {
   }
 });
 
+app.post('/api/ai/switch-experiment', async (req, res) => {
+  try {
+    const r = await fetch('http://localhost:8000/switch-experiment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body),
+      signal: AbortSignal.timeout(5000)
+    });
+    res.json(await r.json());
+  } catch (e) {
+    res.status(503).json({ error: 'AI service unavailable', detail: e.message });
+  }
+});
+
 app.get('/api/ai/status', async (req, res) => {
   try {
     const r = await fetch('http://localhost:8000/status',
       { signal: AbortSignal.timeout(2000) });
     const data = await r.json();
-    // Attach model_meta.json if available
-    if (fs.existsSync(MODEL_META)) {
-      data.meta = JSON.parse(fs.readFileSync(MODEL_META, 'utf8'));
+    // Attach metadata from the active experiment (or fall back to model_dataset_manual)
+    let metaPath = MODEL_META;
+    if (fs.existsSync(EXPERIMENTS_CONFIG)) {
+      try {
+        const cfg = JSON.parse(fs.readFileSync(EXPERIMENTS_CONFIG, 'utf8'));
+        if (cfg.meta_path) metaPath = cfg.meta_path;
+      } catch {}
+    }
+    if (fs.existsSync(metaPath)) {
+      data.meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
     }
     res.json(data);
   } catch {
@@ -109,7 +135,7 @@ app.delete('/api/sessions/:id', (req, res) => {
 // ── CSV ROW COUNT (used by BUILD MODEL button) ────────────────────────────
 
 app.get('/api/csv-stats', (req, res) => {
-  const csvPath = path.join(__dirname, 'data', 'test_results.csv');
+  const csvPath = path.join(__dirname, 'data', 'experiments', 'model_dataset_manual', 'model_data.csv');
   if (!fs.existsSync(csvPath)) return res.json({ rows: 0, exists: false });
   const content = fs.readFileSync(csvPath, 'utf8');
   const rows    = content.split('\n').filter(l => l.trim()).length - 1; // minus header

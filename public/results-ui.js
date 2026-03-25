@@ -71,10 +71,12 @@ window.unlockAIDrivenTab = function() {
 function initTabs() {
   const tabSim  = document.getElementById('tab-sim');
   const tabPid  = document.getElementById('tab-pid');
+  const tabDg   = document.getElementById('tab-data-generator');
   const tabAi   = document.getElementById('tab-ai-driven');
   const tabRep  = document.getElementById('tab-reports');
   const appDiv  = document.getElementById('app');
   const pidDiv  = document.getElementById('pid-tester');
+  const dgDiv   = document.getElementById('data-generator-view');
   const aiDiv   = document.getElementById('ai-driven-view');
   const repDiv  = document.getElementById('reports-view');
 
@@ -82,8 +84,8 @@ function initTabs() {
 
   // Helper: hide all views and deactivate all tabs
   function showOnly(activeTab, activeDiv, extraDisplay = '') {
-    [appDiv, pidDiv, aiDiv, repDiv].forEach(d => { if (d) d.style.display = 'none'; });
-    [tabSim, tabPid, tabAi, tabRep].forEach(t => { if (t) t.classList.remove('active'); });
+    [appDiv, pidDiv, dgDiv, aiDiv, repDiv].forEach(d => { if (d) d.style.display = 'none'; });
+    [tabSim, tabPid, tabDg, tabAi, tabRep].forEach(t => { if (t) t.classList.remove('active'); });
     if (activeDiv) activeDiv.style.display = extraDisplay || 'flex';
     if (activeTab) activeTab.classList.add('active');
   }
@@ -96,6 +98,11 @@ function initTabs() {
   tabPid.addEventListener('click', () => {
     showOnly(tabPid, pidDiv, 'flex');
     setTimeout(redrawAll, 50);
+  });
+
+  tabDg?.addEventListener('click', () => {
+    showOnly(tabDg, dgDiv, 'flex');
+    if (typeof window.initDataGenerator === 'function') window.initDataGenerator();
   });
 
   tabAi?.addEventListener('click', () => {
@@ -1314,7 +1321,11 @@ async function buildModel() {
     const resp = await fetch('/api/ai/train', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ csv_path: '../data/test_results.csv' })
+      body: JSON.stringify({
+        csv_path:      '../data/experiments/model_dataset_manual/model_data.csv',
+        output_dir:    '../data/experiments/model_dataset_manual',
+        meta_filename: 'model_metadata.json',
+      })
     });
     const data = await resp.json();
     clearInterval(iv);
@@ -1324,6 +1335,15 @@ async function buildModel() {
     if (data.status === 'ok') {
       updateModelPanel(data.stats);
       window.unlockAIDrivenTab();
+      // Activate the newly built manual model so experiments_config.json is updated
+      try {
+        await fetch('/api/experiments/model_dataset_manual/activate', { method: 'POST' });
+        await fetch('/api/ai/switch-experiment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ experiment: 'model_dataset_manual' }),
+        });
+      } catch { /* best-effort; training already succeeded */ }
     } else {
       throw new Error(data.detail || 'Unknown error');
     }
