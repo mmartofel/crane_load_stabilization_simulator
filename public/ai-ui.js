@@ -325,10 +325,12 @@ class AIController {
       ? (this.metrics.sumTheta / this.metrics.frames) * (180 / Math.PI)
       : 0;
     return {
-      session_id:  `session_${Date.now()}`,
-      timestamp:   new Date().toISOString(),
-      scenario:    'crane_6min_v1',
-      duration_s:  360,
+      session_id:    `session_${Date.now()}`,
+      timestamp:     new Date().toISOString(),
+      scenario:      'crane_6min_v1',
+      duration_s:    360,
+      stabilizer_on: this.pidEnabled,   // final stabilizer state for REPORTS model info display
+      model_info:    capturedModelInfo, // AI service status snapshot taken at tab activation
       metrics: {
         avg_theta_deg:  +avgTheta.toFixed(3),
         max_theta_deg:  +(this.metrics.maxTheta * 180 / Math.PI).toFixed(3),
@@ -360,6 +362,7 @@ class AIController {
 
 const aiController = new AIController();
 let aiRenderer = null;
+let capturedModelInfo = null;   // snapshot of /api/ai/status stored at tab activation, embedded in session JSON
 let aiAnimRunning = false;
 let aiLastTime = null;
 let aiAccumulator = 0;
@@ -988,6 +991,7 @@ function drawAiAngleChart() {
 // Called on every tab activation so the panel stays in sync with experiments_config.json.
 function refreshModelStatus() {
   fetch('/api/ai/status').then(r => r.json()).then(data => {
+    capturedModelInfo = data;   // snapshot for embedding in the session JSON at scenario end
     const modelName = data.model_id || (data.trained ? 'GradientBoosting' : 'analytical_fallback');
     if (data.trained && data.stats?.metrics) {
       const m = data.stats.metrics;

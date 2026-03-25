@@ -734,24 +734,37 @@ class ReportsUI {
     const container = document.getElementById('model-info-container');
     const content   = document.getElementById('model-info-content');
     if (!container || !content) return;
-
-    // Fetch current model status from AI service
-    let statsData = null;
-    try {
-      const resp = await fetch('/api/ai/status');
-      if (resp.ok) statsData = await resp.json();
-    } catch { /* AI service may not be running */ }
-
-    if (!statsData?.trained) {
-      container.style.display = 'none';
-      return;
-    }
     container.style.display = '';
 
+    // If the stabilizer was explicitly OFF for the whole session, no model was used
+    if (session.stabilizer_on === false) {
+      content.innerHTML = `
+        <div class="model-result-panel">
+          <div style="color:var(--warn);font-size:12px;padding:8px 0">
+            ⊘ Stabilizer was OFF during this session — no AI model was used.
+          </div>
+        </div>`;
+      return;
+    }
+
+    // Old sessions (before this fix) won't have model_info — show a notice
+    if (!session.model_info) {
+      content.innerHTML = `
+        <div class="model-result-panel">
+          <div style="color:#8b949e;font-size:11px;padding:8px 0">
+            ℹ Model info was not recorded for this session.
+          </div>
+        </div>`;
+      return;
+    }
+
+    // Use the model snapshot stored at the time this session was run
+    const statsData = session.model_info;
     const stats   = statsData.stats || {};
     const metrics = stats.metrics   || {};
     const dr      = stats.data_range || {};
     const at      = stats.trained_at ? new Date(stats.trained_at).toLocaleString('en-GB') : '—';
+    const modelId = statsData.model_id || 'GradientBoosting';
 
     // Count low-confidence decisions in this session
     const decisions = session.ai_decisions || [];
@@ -781,10 +794,10 @@ class ReportsUI {
     content.innerHTML = `
       <div class="model-result-panel">
         <div class="model-result-header">
-          <span>Model: GradientBoosting &nbsp;|&nbsp; Trained: ${at}</span>
+          <span>Model: ${modelId} &nbsp;|&nbsp; Trained: ${at}</span>
         </div>
         <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8b949e;margin-bottom:6px">
-          ${stats.n_total ?? '—'} rows (top 30% of grid search results)
+          ${stats.n_total ?? '—'} training rows
         </div>
         <div class="model-result-title">Model Confidence (R² on test set)</div>
         ${rows}
