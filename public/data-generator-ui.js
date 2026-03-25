@@ -332,6 +332,7 @@ class DataGeneratorUI {
       { key: 'model_dataset_fallback', label: 'A — FALLBACK', colorClass: 'danger'  },
       { key: 'model_dataset_low',      label: 'B — LOW',      colorClass: 'warning' },
       { key: 'model_dataset_high',     label: 'C — HIGH',     colorClass: 'success' },
+      { key: 'model_dataset_manual',   label: 'D — MANUAL',   colorClass: 'manual'  },
     ];
 
     container.innerHTML = entries.map(e => {
@@ -351,7 +352,7 @@ class DataGeneratorUI {
         ? `<span class="status-ok">✓ Model: ${r2Text}</span>`
         : `<span class="status-none">○ Model: not built</span>`;
 
-      const buildLabel = hasModel ? '🔨 REBUILD' : '🔨 BUILD MODEL';
+      const buildLabel = hasModel ? '🔨 RETRAIN' : '🔨 TRAIN MODEL';
       const buildBtn = hasData
         ? `<button class="btn-sm" onclick="dataGeneratorUI.buildModel('${e.key}', event)">${buildLabel}</button>`
         : '';
@@ -361,7 +362,7 @@ class DataGeneratorUI {
         : '';
 
       const resetBtn = (hasData || hasModel)
-        ? `<button class="btn-sm btn-danger" onclick="dataGeneratorUI.resetExperiment('${e.key}')">✕ RESET</button>`
+        ? `<button class="btn-sm btn-danger" onclick="dataGeneratorUI.resetExperiment('${e.key}')">✕ DELETE</button>`
         : '';
 
       return `
@@ -407,7 +408,7 @@ class DataGeneratorUI {
       }
     } catch (err) {
       this.showNotification(`Error: ${err.message}`, 'error');
-      if (btn) { btn.disabled = false; btn.textContent = '🔨 BUILD MODEL'; }
+      if (btn) { btn.disabled = false; btn.textContent = '🔨 TRAIN MODEL'; }
     }
   }
 
@@ -464,7 +465,7 @@ class DataGeneratorUI {
     const stopBtn = document.getElementById('dg-stop-btn');
     if (btn) {
       btn.disabled    = isRunning;
-      btn.textContent = isRunning ? '⏳ Generating...' : '▶ GENERATE DATASET';
+      btn.textContent = isRunning ? '⏳ Generating...' : '▶ GENERATE MODEL TRAINING DATASET';
     }
     if (stopBtn) stopBtn.style.display = isRunning ? 'inline-block' : 'none';
   }
