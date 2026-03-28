@@ -29,6 +29,7 @@ async function loadGeneratorModes() {
   const data = await resp.json();
   GENERATOR_MODES = {};
   for (const [key, mode] of Object.entries(data)) {
+    if (key.startsWith('_')) continue;  // skip metadata keys like _comment
     GENERATOR_MODES[key] = enrichMode(mode);
   }
 }
@@ -205,7 +206,7 @@ class DataGeneratorUI {
       Ki_min:       mode.Ki_min, Ki_max: mode.Ki_max, Ki_steps: mode.Ki_steps,
       Kd_min:       mode.Kd_min, Kd_max: mode.Kd_max, Kd_steps: mode.Kd_steps,
       wind_configs: mode.wind_configs,
-      b: 0.15, dt: 0.005, max_time: 30.0,
+      b: 1.2, dt: 0.005, max_time: 30.0,
     };
 
     this.activeWorker = new Worker('/data-generator-worker.js');

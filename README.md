@@ -267,6 +267,60 @@ Switch to the **REPORTS** tab to review and compare AI-driven sessions:
 
 ---
 
+## 🗃️ DATA GENERATOR tab
+
+Switch to the **DATA GENERATOR** tab to build training datasets for the AI model:
+
+| Feature | Description |
+|---|---|
+| 📋 **Three mode cards** | FALLBACK (fast, R²<0.50) / LOW (balanced) / HIGH (comprehensive, R²>0.75) |
+| ⚙️ **Headless physics** | Web Worker runs thousands of PID simulations without UI rendering |
+| 🔨 **Train model** | One-click GradientBoosting training after data generation |
+| ✓ **Activate** | Set the active experiment for the AI DRIVEN tab |
+
+### How to generate good training data
+
+The recommended approach is the **analytical Python generator** — it derives near-optimal (Kp, Ki, Kd) from control-theory formulas rather than sweeping a grid:
+
+```bash
+cd ai-service
+
+# Quick test (~20 s, ~200 rows — good for verifying the pipeline)
+python generate_optimal_pid.py --quick --out ../data/experiments/model_dataset_auto/model_data.csv
+
+# Full dataset (~5 min, ~1,500 rows — production quality)
+python generate_optimal_pid.py --out ../data/experiments/model_dataset_auto/model_data.csv
+
+# Train the model on the generated CSV
+python trainer.py ../data/experiments/model_dataset_auto/model_data.csv
+```
+
+Then activate the experiment from the DATA GENERATOR tab UI.
+
+### Known physics alignment requirements
+
+All training simulations must use the same physics constants as `sim.js` (the actual simulator). Critical parameters:
+
+| Parameter | `sim.js` value | Must match in training |
+|-----------|---------------|----------------------|
+| Damping `b` | **1.2** | `generate_optimal_pid.py` (B), `data-generator-ui.js` (b config) |
+| Gravity `g` | 9.81 m/s² | all physics files |
+| Max time angle | 45° diverge | all files |
+
+> If damping is mismatched (e.g., `b=0.15`), gains trained on lightly-damped physics will be too aggressive for the real simulator and cause oscillation — even if model R² appears very high.
+
+### Why high R² does not guarantee good stabilization
+
+The ML model predicts **(Kp, Ki, Kd)** given **(L, m, wind)** conditions. High R² means the model fits its training data well — but if:
+- Training physics differ from the real simulator (damping mismatch), or
+- Training data contains all (Kp, Ki, Kd) grid combinations instead of only the optimal ones,
+
+...then the model predicts gains that are correct for the wrong system, or predicts the average of all tested gains rather than the best.
+
+**Quality gate:** run the AI DRIVEN scenario and verify avg θ < 3° and max θ < 5° during stabilized phases.
+
+---
+
 ## 🧮 Physics model
 
 Linearized spherical pendulum (small-angle approximation):

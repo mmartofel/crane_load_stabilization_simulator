@@ -10,6 +10,34 @@ This directory stores persistent data for the Tower Crane Load Stabilization Sim
 
 ---
 
+## experiments/
+
+The `experiments/` directory contains separate training datasets and models for the AI DRIVEN tab. Each sub-directory corresponds to one dataset slot:
+
+| Directory | Source | Description |
+|-----------|--------|-------------|
+| `model_dataset_fallback` | DATA GENERATOR (grid search) | Broad PID grid sweep; all combinations stored — ML-ambiguous, expect R²≈0 |
+| `model_dataset_low` | DATA GENERATOR (grid search) | Denser grid; same ambiguity issue unless best-filter is applied |
+| `model_dataset_high` | DATA GENERATOR (grid search) | Fine grid; requires completed generation run (>50k rows) to be valid |
+| `model_dataset_manual` | PID TESTS tab (hand-picked) | Small (100–300 rows) but high-quality hand-tuned results |
+| `model_dataset_auto` | `generate_optimal_pid.py` (analytical) | **Recommended**: near-optimal gains derived from control theory |
+
+Each sub-directory contains:
+- `model_data.csv` — training data (same schema as `test_results.csv`)
+- `model.joblib` — trained GradientBoosting model (after `python trainer.py`)
+- `model_metadata.json` — R², MAE, row count, trained timestamp, data range
+- `model_generation_log.json` — generation parameters and elapsed time
+
+### Physics alignment requirement
+
+All training CSVs must be generated with `b = 1.2` (matching `sim.js`). The generator default was historically `b = 0.15`, causing an 8× damping mismatch. Check `model_generation_log.json` for the `b` value used.
+
+### Training data best practices
+
+1. Use `generate_optimal_pid.py` (analytical) for fastest path to a working model.
+2. If using the DATA GENERATOR (grid search), enable best-per-condition filtering so only the optimal (Kp, Ki, Kd) per (L, m, wind) group is saved.
+3. Never train on a mix of all-combinations grid search data — the ML model will learn the mean of all tested gains, not the optimal gains.
+
 ## test_results.csv
 
 `test_results.csv` is appended by the server every time the **PID TESTS** tab saves a batch of optimizer results (`POST /api/results`). The same file is read by the `ai-service` Python process as training data for the GradientBoosting ML model.
