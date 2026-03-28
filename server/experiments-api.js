@@ -5,7 +5,7 @@ const path = require('path');
 const EXPERIMENTS_DIR = path.join(__dirname, '..', 'data', 'experiments');
 fs.mkdirSync(EXPERIMENTS_DIR, { recursive: true });
 
-const ALLOWED = ['model_dataset_fallback', 'model_dataset_low', 'model_dataset_high', 'model_dataset_manual'];
+const ALLOWED = ['model_dataset_fallback', 'model_dataset_low', 'model_dataset_high', 'model_dataset_manual', 'model_dataset_auto'];
 
 const GENERATOR_MODES_FILE = path.join(EXPERIMENTS_DIR, 'generator_modes.json');
 

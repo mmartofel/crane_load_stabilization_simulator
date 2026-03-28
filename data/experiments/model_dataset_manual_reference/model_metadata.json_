@@ -1,0 +1,35 @@
+{
+  "model_id": null,
+  "n_total": 325,
+  "score_threshold": null,
+  "metrics": {
+    "Kp": {
+      "r2": -0.0209,
+      "mae": 20.6572,
+      "n_train": 260,
+      "n_test": 65
+    },
+    "Ki": {
+      "r2": -0.0562,
+      "mae": 10.2518,
+      "n_train": 260,
+      "n_test": 65
+    },
+    "Kd": {
+      "r2": -0.0156,
+      "mae": 9.3941,
+      "n_train": 260,
+      "n_test": 65
+    }
+  },
+  "avg_r2": -0.0309,
+  "confidence_label": "FALLBACK",
+  "trained_at": "2026-03-28T19:15:48.947077Z",
+  "data_range": {
+    "L_min": 3.0,
+    "L_max": 20.0,
+    "m_min": 2.0,
+    "m_max": 2.0,
+    "wind_max": 8.0
+  }
+}

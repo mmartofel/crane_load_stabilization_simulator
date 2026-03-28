@@ -318,8 +318,76 @@
 .dataset-card-warning { border-color: rgba(255,107,53,0.35); }
 .dataset-card-success { border-color: rgba(0,212,170,0.35); }
 .dataset-card-manual  { border-color: rgba(100,149,237,0.45); }
+.dataset-card-auto    { border-color: rgba(147,112,219,0.45); }
 .status-ok   { color: var(--accent); }
 .status-none { color: rgba(139,148,158,0.55); }
+
+/* ── Inline prediction confidence rows ───────────────────────── */
+.dg-conf-col {
+  flex: 0 0 auto;
+  width: 200px;
+  margin: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dg-conf-empty { width: 0; margin: 0; }
+
+/* each row: name · bar · value */
+.dg-conf-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.dg-conf-row-name {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: rgba(139,148,158,0.55);
+  width: 30px;
+  flex-shrink: 0;
+  text-align: right;
+}
+/* overall score row — name is the R² value, bigger */
+.dg-conf-row-name.is-score {
+  font-size: 13px;
+  font-weight: 600;
+  width: 30px;
+  color: inherit; /* set via inline style */
+}
+.dg-conf-bar-track {
+  flex: 1;
+  height: 4px;
+  background: rgba(139,148,158,0.15);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.dg-conf-bar-track.mini {
+  height: 3px;
+}
+.dg-conf-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+.dg-conf-row-label {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  width: 56px;
+  flex-shrink: 0;
+}
+.dg-conf-row-val {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: rgba(139,148,158,0.6);
+  width: 28px;
+  flex-shrink: 0;
+  text-align: right;
+}
+.dg-conf-sep {
+  height: 1px;
+  background: rgba(139,148,158,0.12);
+}
 
 /* ── Active model banner ─────────────────────────────────────── */
 #dg-active-model-bar {
