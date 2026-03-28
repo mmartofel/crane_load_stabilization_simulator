@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-generate_optimal_pid.py  —  v4 (analytical, b=1.2)
-══════════════════════════════════════════════════
+generate_optimal_pid.py  —  v5 (force-aligned with sim.js PropellerMixer)
+══════════════════════════════════════════════════════════════════════════
 Generates training CSV where every row contains Kp/Ki/Kd derived from
 control-theory formulas, not simulation scoring.
 
@@ -15,10 +15,23 @@ WHY ANALYTICAL:
     Kd = GAMMA_KD * T                   non-zero derivative for b=1.2 system
   Plus Gaussian perturbations so the ML model generalises not memorises.
 
-PHYSICS ALIGNMENT (v4 change):
-  B is now 1.2, matching sim.js (was 0.15 — 8× mismatch causing poor real-world
-  performance even when R² was high on training data).  With B=1.2 the system
-  is more naturally damped so Kp alphas are reduced and Kd is non-zero.
+PHYSICS ALIGNMENT (v5 changes):
+  Force application now matches sim.js PropellerMixer routing exactly:
+    PID_output → clamp(output * SCALE, -1, 1) / SCALE² → applied force
+  This gives 6.667× force amplification (SCALE=0.15) and saturates at ±44.44 N,
+  identical to ui.js / ai-ui.js / runHeadless.
+
+  Previously the generator applied PID force directly (÷6.667 weaker), causing
+  the model to predict Kp≈88 for heavy loads.  In the actual sim those gains
+  immediately saturate propellers at θ>4.3° and cause 32° excursions.
+
+  Kp is now capped at KP_MAX=18 (matching model.py analytical fallback).
+  With the mixer amplification, Kp=18 produces Kp_eff=120 N/rad in the real sim
+  — adequate for all scenario conditions without saturation below θ=21°.
+
+  Integral clamp raised from ±10 to ±50 to match sim.js PIDController.
+  Euler integration kept (RK4 not needed: ML trains on (L,m,wind)→gains only,
+  not simulation metrics, so integration order doesn't affect model quality).
 
 USAGE:
   python generate_optimal_pid.py             # full dataset  (~5 min)
@@ -36,19 +49,29 @@ import numpy as np
 # ── Constants ─────────────────────────────────────────────────────────────────
 G            = 9.81
 B            = 1.2    # must match sim.js (was 0.15 — caused 8× damping mismatch)
-DT           = 0.016
+DT           = 0.016  # matches live sim animation loop (ui.js / ai-ui.js)
 MAX_TIME     = 40.0
 DIVERGE_DEG  = 45.0
 SETTLE_DEG   = 1.0
 SETTLE_DUR   = 2.0
 
-# With B=1.2 the system is heavily damped — lower Kp alphas prevent over-actuation.
-# Range 0.30–0.55 aligns with the model.py analytical fallback (0.55 * m*g/L).
+# PropellerMixer scale — must match sim.js PropellerMixer.scale
+# Force pipeline: F_prop = clamp(PID_output * SCALE, -1, 1) / SCALE²
+# → amplifies by 1/SCALE=6.667, saturates at ±1/SCALE²=44.44 N
+SCALE = 0.15
+
+# With corrected mixer force application the effective Kp in the physics is
+# Kp/SCALE² — so alphas must be 6.667× smaller than before the fix.
+# Range 0.30–0.55 is kept (makes physical sense for wind loading variation)
+# but the hard cap KP_MAX=18 prevents over-actuation for heavy loads.
+# This matches the model.py analytical fallback: Kp = min(0.55 * m*g/L, 18).
 ALPHA_KP_BASE  = 0.30
 ALPHA_KP_MAX   = 0.55
 ALPHA_KP_SLOPE = 3.0
 ALPHA_KI_BASE  = 0.04
 ALPHA_KI_MAX   = 0.10
+
+KP_MAX = 18.0   # hard ceiling — matches model.py fallback; proven safe in sessions
 
 # Kd is non-zero for the b=1.2 system — aligns with model.py fallback (T * 0.4).
 GAMMA_KD     = 0.40   # Kd = GAMMA_KD * T, where T = 2π√(L/g)
@@ -76,13 +99,16 @@ def optimal_gains(L, m, ws):
     wl  = wind_loading(ws, m)
     akp = ALPHA_KP_BASE + (ALPHA_KP_MAX - ALPHA_KP_BASE) * (1 - np.exp(-ALPHA_KP_SLOPE * wl))
     aki = ALPHA_KI_BASE + (ALPHA_KI_MAX - ALPHA_KI_BASE) * (1 - np.exp(-ALPHA_KP_SLOPE * wl))
-    Kd  = GAMMA_KD * T   # non-zero derivative — needed for b=1.2 real simulator
-    return akp * kpc, aki * akp * kpc / T, Kd
+    Kp  = min(akp * kpc, KP_MAX)   # cap at KP_MAX — prevents over-actuation in actual sim
+    Ki  = aki * Kp / T             # scale Ki relative to capped Kp
+    Kd  = GAMMA_KD * T             # non-zero derivative — needed for b=1.2 real simulator
+    return Kp, Ki, Kd
 
 def perturbed_gains(L, m, ws, rng):
     Kp0, Ki0, Kd0 = optimal_gains(L, m, ws)
     kpc = kp_critical(L, m); T = period(L)
-    Kp  = float(np.clip(Kp0 * (1 + rng.normal(0, NOISE_KP)), 0.05*kpc, 0.90*kpc))
+    # Upper Kp bound is KP_MAX — perturbed variants must not exceed the safe ceiling
+    Kp  = float(np.clip(Kp0 * (1 + rng.normal(0, NOISE_KP)), 0.05*min(kpc, KP_MAX), KP_MAX))
     Ki  = float(np.clip(Ki0 * (1 + rng.normal(0, NOISE_KI)), 0.0, 0.3*Kp/T))
     Kd  = float(np.clip(Kd0 * (1 + rng.normal(0, NOISE_KD)), 0.0, 1.5*T))
     return Kp, Ki, Kd
@@ -105,12 +131,25 @@ def simulate(L, m, Kp, Ki, Kd, ws, wd, dist='step'):
         else:                 f = 1.+0.4*np.sin(2*np.pi*t/3.)
 
         Fx=Fx0*f; Fy=Fy0*f
-        ex=-tx; ey=-ty
-        ix=float(np.clip(ix+ex*DT,-10,10)); iy=float(np.clip(iy+ey*DT,-10,10))
+
+        # PID — error = angle itself, matching sim.js: pidX.compute(pendulum.state.theta_x, dt)
+        ex=tx; ey=ty
+        ix=float(np.clip(ix+ex*DT,-50,50)); iy=float(np.clip(iy+ey*DT,-50,50))
         dex=(ex-pex)/DT if step>0 else 0.; pex=ex
         dey=(ey-pey)/DT if step>0 else 0.; pey=ey
-        fpx=float(np.clip(Kp*ex+Ki*ix+Kd*dex,-50,50))
-        fpy=float(np.clip(Kp*ey+Ki*iy+Kd*dey,-50,50))
+
+        # Mixer-equivalent force routing — matches sim.js PropellerMixer:
+        #   mix(): pwm = clamp(pid_output * SCALE, -1, 1)
+        #   getForce(): F_back = pwm / SCALE
+        #   applied = F_back * (1/SCALE) = pwm / SCALE²
+        raw_x = Kp*ex + Ki*ix + Kd*dex
+        raw_y = Kp*ey + Ki*iy + Kd*dey
+        fpx = float(np.clip(raw_x * SCALE, -1.0, 1.0)) / (SCALE * SCALE)
+        fpy = float(np.clip(raw_y * SCALE, -1.0, 1.0)) / (SCALE * SCALE)
+
+        # Euler integration (matches data-generator-worker.js; RK4 would be more
+        # accurate but the ML model trains on (L,m,wind)→(Kp,Ki,Kd) only —
+        # simulation metrics are not ML features so integration order doesn't affect quality)
         ax=(Fx-B*ox-m*G*tx-fpx)/(m*L); ay=(Fy-B*oy-m*G*ty-fpy)/(m*L)
         ox+=ax*DT; oy+=ay*DT; tx+=ox*DT; ty+=oy*DT
 
@@ -121,7 +160,9 @@ def simulate(L, m, Kp, Ki, Kd, ws, wd, dist='step'):
         max_t=max(max_t,tm)
         if tm<thr:
             sc+=DT
-            if sc>=SETTLE_DUR and ts is None: ts=t-SETTLE_DUR
+            if sc>=SETTLE_DUR:
+                if ts is None: ts=t-SETTLE_DUR
+                break   # early exit — settled; avoids running to MAX_TIME on every sim
         else: sc=0.
 
     ss=np.hypot(tx,ty)
@@ -146,7 +187,7 @@ def build_conditions(quick):
         m_v=[2.,5.,10.,20.,50.,100.,200.,500.]
         ws_v=[2.,5.,8.,12.,16.,20.]
         wd_v=[0.,45.,90.,135.,180.,270.,315.]
-        dist_v=['step','impulse','ramp','gust']; n_p=6
+        dist_v=['step','impulse','ramp','gust']; n_p=3
 
     conds=[]
     for L in L_v:
@@ -167,7 +208,7 @@ def main(out_path, quick):
     rng=np.random.default_rng(42)
     est=total*0.05
     print(f'\n{"="*62}')
-    print(f'  Crane PID Analytical Data Generator  v3')
+    print(f'  Crane PID Analytical Data Generator  v5')
     print(f'  Rows      : {total}  |  Est. time : ~{est/60:.1f} min')
     print(f'  Output    : {out}')
     print(f'{"="*62}\n')
