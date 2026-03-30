@@ -19,7 +19,7 @@ class AIController {
     this.history     = [];     // [{t, Kp, Ki, Kd, reason, forced, confidence}]
     this.timeseries  = [];     // [{t, theta, Kp, Ki, Kd}] recorded every ~1s
 
-    this.conditions  = { L: 12, m: 50, wind_speed: 4, wind_dir: 60 };
+    this.conditions  = { L: 12, m: 50, wind_speed: 4, wind_dir: 60, disturbance_type: 'step' };
     this.scenarioTime = 0;
     this.isRunning   = false;
     this.firedEvents = new Set();
@@ -47,13 +47,17 @@ class AIController {
     this.prevParams  = { ...this.params };
     this.history     = [];
     this.timeseries  = [];
-    this.conditions  = { L: 12, m: 50, wind_speed: 4, wind_dir: 60 };
+    this.conditions  = { L: 12, m: 50, wind_speed: 4, wind_dir: 60, disturbance_type: 'step' };
     this.scenarioTime = 0;
     this.isRunning   = false;
     this.firedEvents = new Set();
     this.lastUpdate  = -999;
     this._lastTsRecord = 0;
-    this.metrics     = { sumTheta: 0, maxTheta: 0, frames: 0, perPhase: {} };
+    this.metrics     = {
+      sumTheta: 0, maxTheta: 0, frames: 0, perPhase: {},
+      maxThetaX: 0, maxThetaY: 0,   // per-axis max (radians)
+      framesWithin5: 0, framesWithin5X: 0, framesWithin5Y: 0  // quality gate counts
+    };
 
     this.pidEnabled  = true;
     this.pendulum = new Pendulum({ L: this.conditions.L, m: this.conditions.m });
@@ -231,21 +235,33 @@ class AIController {
       this._lastTsRecord = this.scenarioTime;
       const theta = Math.hypot(this.pendulum.state.theta_x, this.pendulum.state.theta_y);
       this.timeseries.push({
-        t:       Math.round(this.scenarioTime),
-        theta:   +(theta * 180 / Math.PI).toFixed(3),
-        theta_x: +this.pendulum.state.theta_x.toFixed(5),
-        theta_y: +this.pendulum.state.theta_y.toFixed(5),
-        Kp:      +this.params.Kp.toFixed(3),
-        Ki:      +this.params.Ki.toFixed(4),
-        Kd:      +this.params.Kd.toFixed(3)
+        t:          Math.round(this.scenarioTime),
+        theta:      +(theta * 180 / Math.PI).toFixed(3),
+        theta_x:    +this.pendulum.state.theta_x.toFixed(5),
+        theta_y:    +this.pendulum.state.theta_y.toFixed(5),
+        theta_x_deg: +(this.pendulum.state.theta_x * 180 / Math.PI).toFixed(3),
+        theta_y_deg: +(this.pendulum.state.theta_y * 180 / Math.PI).toFixed(3),
+        Kp:         +this.params.Kp.toFixed(3),
+        Ki:         +this.params.Ki.toFixed(4),
+        Kd:         +this.params.Kd.toFixed(3),
+        wind_speed: +this.conditions.wind_speed.toFixed(2),
+        wind_dir:   +this.conditions.wind_dir.toFixed(1)
       });
     }
 
     // Accumulate metrics
-    const theta = Math.hypot(this.pendulum.state.theta_x, this.pendulum.state.theta_y);
-    this.metrics.sumTheta += theta * dt;
-    this.metrics.maxTheta  = Math.max(this.metrics.maxTheta, theta);
+    const theta  = Math.hypot(this.pendulum.state.theta_x, this.pendulum.state.theta_y);
+    const absTx  = Math.abs(this.pendulum.state.theta_x);
+    const absTy  = Math.abs(this.pendulum.state.theta_y);
+    const DEG5   = 5 * Math.PI / 180;
+    this.metrics.sumTheta   += theta * dt;
+    this.metrics.maxTheta    = Math.max(this.metrics.maxTheta, theta);
+    this.metrics.maxThetaX   = Math.max(this.metrics.maxThetaX, absTx);
+    this.metrics.maxThetaY   = Math.max(this.metrics.maxThetaY, absTy);
     this.metrics.frames++;
+    if (absTx < DEG5 && absTy < DEG5) this.metrics.framesWithin5++;
+    if (absTx < DEG5)                  this.metrics.framesWithin5X++;
+    if (absTy < DEG5)                  this.metrics.framesWithin5Y++;
 
     // Update renderer
     if (this.renderer) {
@@ -274,8 +290,10 @@ class AIController {
 
       if (ev.type === 'set') {
         Object.assign(this.conditions, ev.params);
+        this.conditions.disturbance_type = 'step';
         this._syncPhysics();
       } else if (ev.type === 'ramp') {
+        this.conditions.disturbance_type = 'ramp';
         const startVals = {};
         Object.keys(ev.params).forEach(k => { startVals[k] = this.conditions[k]; });
         const startT = this.scenarioTime;
@@ -290,10 +308,15 @@ class AIController {
         }, 50);
       } else if (ev.type === 'gust') {
         const orig = this.conditions.wind_speed;
+        this.conditions.disturbance_type = 'gust';
         this.conditions.wind_speed *= ev.params.multiplier;
-        setTimeout(() => { this.conditions.wind_speed = orig; },
-          ev.params.duration * 1000);
+        setTimeout(() => {
+          this.conditions.wind_speed = orig;
+          this.conditions.disturbance_type = 'step';
+          updateConditionsUI(this.conditions);
+        }, ev.params.duration * 1000);
       } else if (ev.type === 'rotate') {
+        this.conditions.disturbance_type = 'rotate';
         if (this.renderer) {
           this.renderer.animateYaw(ev.params.yaw_delta, ev.duration * 1000);
         }
@@ -332,10 +355,18 @@ class AIController {
       stabilizer_on: this.pidEnabled,   // final stabilizer state for REPORTS model info display
       model_info:    capturedModelInfo, // AI service status snapshot taken at tab activation
       metrics: {
-        avg_theta_deg:  +avgTheta.toFixed(3),
-        max_theta_deg:  +(this.metrics.maxTheta * 180 / Math.PI).toFixed(3),
-        ai_updates:     this.history.length,
-        forced_updates: this.history.filter(h => h.forced).length
+        avg_theta_deg:    +avgTheta.toFixed(3),
+        max_theta_deg:    +(this.metrics.maxTheta  * 180 / Math.PI).toFixed(3),
+        max_theta_x_deg:  +(this.metrics.maxThetaX * 180 / Math.PI).toFixed(3),
+        max_theta_y_deg:  +(this.metrics.maxThetaY * 180 / Math.PI).toFixed(3),
+        pct_within_5deg:  this.metrics.frames > 0
+          ? +(this.metrics.framesWithin5  / this.metrics.frames * 100).toFixed(1) : 0,
+        pct_within_5deg_x: this.metrics.frames > 0
+          ? +(this.metrics.framesWithin5X / this.metrics.frames * 100).toFixed(1) : 0,
+        pct_within_5deg_y: this.metrics.frames > 0
+          ? +(this.metrics.framesWithin5Y / this.metrics.frames * 100).toFixed(1) : 0,
+        ai_updates:       this.history.length,
+        forced_updates:   this.history.filter(h => h.forced).length
       },
       ai_decisions: this.history,
       timeseries:   this.timeseries,
@@ -553,6 +584,8 @@ function updateConditionsUI(cond) {
   if (mel) mel.textContent = `${Math.round(cond.m)} kg`;
   const wel = document.getElementById('ai-cond-wind');
   if (wel) wel.textContent = `${cond.wind_speed.toFixed(1)} m/s  ${Math.round(cond.wind_dir)}°`;
+  const del = document.getElementById('ai-cond-disturbance');
+  if (del) del.textContent = cond.disturbance_type ?? '—';
 }
 
 function updateDecisionHistoryUI(history) {

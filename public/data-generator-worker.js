@@ -2,7 +2,8 @@
 // Standalone file: no ES6 imports (Web Workers cannot use module imports).
 // Message protocol:
 //   Input:    { type: 'START', config: { L_values, m_values,
-//               Kp_min, Kp_max, Kp_steps, Ki_min, Ki_max, Ki_steps,
+//               Kp_min, Kp_max, Kp_steps, Kp_log_scale,
+//               Ki_min, Ki_max, Ki_steps,
 //               Kd_min, Kd_max, Kd_steps, wind_configs, b, dt, max_time } }
 //   Progress: { type: 'PROGRESS', done, total, ok, skipped, lastResult }
 //   Complete: { type: 'COMPLETE', records, done, skipped }
@@ -14,6 +15,15 @@ const g = 9.81;
 function linspace(min, max, n) {
   if (n === 1) return [min];
   return Array.from({ length: n }, (_, i) => min + (max - min) * i / (n - 1));
+}
+
+// Generate n logarithmically-spaced values between min and max (inclusive).
+// Requires min > 0.  Optimal Kp scales with m (range ~0.5-500), so log-scale
+// gives even coverage across light and heavy loads in a single fixed grid.
+function logspace(min, max, n) {
+  if (n === 1) return [min];
+  const lMin = Math.log10(min), lMax = Math.log10(max);
+  return Array.from({ length: n }, (_, i) => Math.pow(10, lMin + (lMax - lMin) * i / (n - 1)));
 }
 
 // Run one headless pendulum simulation; returns metrics object or null if diverged
@@ -110,7 +120,11 @@ self.onmessage = function(e) {
   const cfg = e.data.config;
 
   try {
-    const KpVals = linspace(cfg.Kp_min, cfg.Kp_max, cfg.Kp_steps);
+    // Kp spans orders of magnitude (0.5-450) across the m range — use log-scale
+    // so each step covers equal proportional distance rather than absolute distance.
+    const KpVals = (cfg.Kp_log_scale && cfg.Kp_min > 0)
+      ? logspace(cfg.Kp_min, cfg.Kp_max, cfg.Kp_steps)
+      : linspace(cfg.Kp_min, cfg.Kp_max, cfg.Kp_steps);
     const KiVals = linspace(cfg.Ki_min, cfg.Ki_max, cfg.Ki_steps);
     const KdVals = linspace(cfg.Kd_min, cfg.Kd_max, cfg.Kd_steps);
     const total  = cfg.L_values.length * cfg.m_values.length *
@@ -121,30 +135,34 @@ self.onmessage = function(e) {
     let done = 0, skipped = 0;
     // Send ~200 progress reports over the full run
     const PROGRESS_INTERVAL = Math.max(1, Math.floor(total / 200));
+    const b       = cfg.b        ?? 1.2;    // default matches sim.js
+    const dt      = cfg.dt       ?? 0.005;
+    const maxTime = cfg.max_time ?? 30.0;
 
+    // Outer loop: one condition group = (L, m, wind_config).
+    // For each group we try all (Kp × Ki × Kd) combinations and keep only the
+    // best-scoring result.  This prevents the ML ambiguity that arises when
+    // many different gains are stored for the same physical condition.
     for (const L of cfg.L_values) {
       for (const m of cfg.m_values) {
-        for (const Kp of KpVals) {
-          for (const Ki of KiVals) {
-            for (const Kd of KdVals) {
-              for (const wc of cfg.wind_configs) {
+        for (const wc of cfg.wind_configs) {
+          let bestResult = null;
+          let bestKp = 0, bestKi = 0, bestKd = 0;
+
+          for (const Kp of KpVals) {
+            for (const Ki of KiVals) {
+              for (const Kd of KdVals) {
                 const result = simulatePendulum(
                   L, m, Kp, Ki, Kd,
                   wc.speed, wc.dir_deg, wc.disturbance_type,
-                  cfg.b ?? 0.15, cfg.dt ?? 0.005, cfg.max_time ?? 30.0
+                  b, dt, maxTime
                 );
                 done++;
-                if (result === null) { skipped++; continue; }
-
-                records.push({
-                  timestamp:        new Date().toISOString(),
-                  L, m,
-                  Kp: +Kp.toFixed(4), Ki: +Ki.toFixed(4), Kd: +Kd.toFixed(4),
-                  wind_speed:       wc.speed,
-                  wind_dir_deg:     wc.dir_deg,
-                  disturbance_type: wc.disturbance_type,
-                  ...result
-                });
+                if (result === null) { skipped++; }
+                else if (bestResult === null || result.score < bestResult.score) {
+                  bestResult = result;
+                  bestKp = Kp; bestKi = Ki; bestKd = Kd;
+                }
 
                 if (done % PROGRESS_INTERVAL === 0) {
                   self.postMessage({
@@ -153,12 +171,25 @@ self.onmessage = function(e) {
                     lastResult: {
                       L, m,
                       Kp: +Kp.toFixed(2), Ki: +Ki.toFixed(3), Kd: +Kd.toFixed(2),
-                      score: result.score
+                      score: result ? result.score : null
                     }
                   });
                 }
               }
             }
+          }
+
+          // Emit only the best (Kp, Ki, Kd) for this (L, m, wind) condition
+          if (bestResult !== null) {
+            records.push({
+              timestamp:        new Date().toISOString(),
+              L, m,
+              Kp: +bestKp.toFixed(4), Ki: +bestKi.toFixed(4), Kd: +bestKd.toFixed(4),
+              wind_speed:       wc.speed,
+              wind_dir_deg:     wc.dir_deg,
+              disturbance_type: wc.disturbance_type,
+              ...bestResult
+            });
           }
         }
       }

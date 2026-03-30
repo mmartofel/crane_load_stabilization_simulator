@@ -1,58 +1,106 @@
 {
+  "_comment": [
+    "Physics constants used in training simulations (must match sim.js):",
+    "  b = 1.2 (damping), g = 9.81, diverge = 45°, settle = 1° for 2 s",
+    "Gain ranges are derived from computePhysicsRanges() in optimizer.js:",
+    "  Kp_max  = m_max * 0.85 (95th-pct of scenario loads)",
+    "  Kd_max  = 6.0 s  (covers T_period * 0.4 for L = 5–20 m, T = 4.5–9 s)",
+    "  Ki_max  = 2.0    (covers analytical Ki for m ≤ 150 kg; HIGH uses 3.0)",
+    "Kp uses LOG-SCALE grid (Kp_log_scale: true, Kp_min > 0) so a 4-step grid",
+    "covers m = 2 kg (Kp_opt ≈ 0.65) and m = 150 kg (Kp_opt ≈ 118) equally.",
+    "Worker emits ONE best-scoring row per (L, m, wind_config) condition group.",
+    "  output_rows  = L_count × m_count × wind_config_count",
+    "  total_sims   = output_rows × Kp_steps × Ki_steps × Kd_steps"
+  ],
+
   "fallback": {
     "id":           "model_dataset_fallback",
     "label":        "FALLBACK",
-    "description":  "Very little data, narrow parameter range. Expected R² < 0.50. Shows AI behavior without sufficient training data.",
+    "description":  "Coarse 4-step gain grid; 4 wind scenarios. Covers the AI scenario load range (m = 2–150 kg, L = 5–20 m) but the gain grid is too sparse to find precise optima — model predicts approximate gains. Expected R² 0.40–0.60.",
     "color":        "var(--red)",
     "bgColor":      "rgba(255,68,68,0.12)",
-    "expected_r2":  "< 0.50",
-    "L_values":     [3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0],
-    "m_values":     [2.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 50.0, 100.0, 150.0, 200.0, 250.0, 300.0, 370.0, 420.0, 470.0, 500.0],
-    "Kp_steps": 5,  "Kp_min": 2.0,  "Kp_max": 14.0,
-    "Ki_steps": 3,  "Ki_min": 0.0,  "Ki_max": 0.2,
-    "Kd_steps": 5,  "Kd_min": 0.5,  "Kd_max": 5.0,
+    "expected_r2":  "0.40–0.60",
+
+    "L_values": [5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0],
+    "m_values": [2.0, 5.0, 10.0, 20.0, 30.0, 50.0, 80.0, 100.0, 120.0, 150.0],
+
+    "Kp_min": 0.5,  "Kp_max": 130.0, "Kp_steps": 4,  "Kp_log_scale": true,
+    "Ki_min": 0.0,  "Ki_max": 2.0,   "Ki_steps": 4,
+    "Kd_min": 0.0,  "Kd_max": 6.0,   "Kd_steps": 4,
+
     "wind_configs": [
       { "speed": 3.0,  "dir_deg": 0,   "disturbance_type": "step"    },
       { "speed": 6.0,  "dir_deg": 90,  "disturbance_type": "gust"    },
       { "speed": 10.0, "dir_deg": 180, "disturbance_type": "ramp"    },
-      { "speed": 14.0, "dir_deg": 315, "disturbance_type": "impulse" }
-    ]
+      { "speed": 14.0, "dir_deg": 315, "disturbance_type": "impulse" },
+      { "speed": 10.0, "dir_deg": 200, "disturbance_type": "rotate" }
+    ],
+
+    "_stats": {
+      "output_rows":  640,
+      "total_sims":   40960,
+      "est_minutes":  4,
+      "Kp_grid_logspace": "[0.50, 3.19, 20.37, 130.00]  — covers m=2 (opt≈0.65) and m=50 (opt≈20) well"
+    }
   },
+
   "low": {
     "id":           "model_dataset_low",
     "label":        "LOW",
-    "description":  "Medium amount of data, limited parameter range. Expected R² 0.50–0.75. Shows AI with partial data coverage.",
+    "description":  "Finer 6-step gain grid; 3 wind scenarios. Same L/m range as FALLBACK but better gain resolution — model finds closer-to-optimal gains for more conditions. Expected R² 0.60–0.75.",
     "color":        "var(--warn)",
     "bgColor":      "var(--warn-dim)",
-    "expected_r2":  "0.50–0.75",
-    "L_values":     [5.0, 10.0, 15.0, 20.0],
-    "m_values":     [2.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 50.0, 100.0, 150.0, 200.0, 250.0, 300.0, 370.0, 420.0, 470.0, 500.0],
-    "Kp_steps": 6,  "Kp_min": 0.0,  "Kp_max": 60.0,
-    "Ki_steps": 10, "Ki_min": 0.0,  "Ki_max": 20.0,
-    "Kd_steps": 6,  "Kd_min": 0.0,  "Kd_max": 20.0,
+    "expected_r2":  "0.60–0.75",
+
+    "L_values": [5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0],
+    "m_values": [2.0, 5.0, 10.0, 20.0, 30.0, 50.0, 80.0, 100.0, 120.0, 150.0],
+
+    "Kp_min": 0.5,  "Kp_max": 130.0, "Kp_steps": 6,  "Kp_log_scale": true,
+    "Ki_min": 0.0,  "Ki_max": 2.0,   "Ki_steps": 6,
+    "Kd_min": 0.0,  "Kd_max": 6.0,   "Kd_steps": 6,
+
     "wind_configs": [
       { "speed": 4.0,  "dir_deg": 45,  "disturbance_type": "step" },
       { "speed": 8.0,  "dir_deg": 135, "disturbance_type": "gust" },
-      { "speed": 12.0, "dir_deg": 270, "disturbance_type": "ramp" }
-    ]
+      { "speed": 12.0, "dir_deg": 270, "disturbance_type": "ramp" },
+      { "speed": 14.0, "dir_deg": 315, "disturbance_type": "impulse" }
+    ],
+
+    "_stats": {
+      "output_rows":  480,
+      "total_sims":   103680,
+      "est_minutes":  10,
+      "Kp_grid_logspace": "[0.50, 1.52, 4.62, 14.06, 42.75, 130.00]  — good spread; m=50 opt≈20 landed between 14 and 43"
+    }
   },
+
   "high": {
     "id":           "model_dataset_high",
     "label":        "HIGH",
-    "description":  "Large dataset with full parameter coverage. Expected R² > 0.75. Production-quality model for AI DRIVEN.",
+    "description":  "Broadest L/m coverage (L = 3–20 m, m = 2–500 kg) with 7-step log-scale Kp grid covering the full load spectrum. Produces 1296 training rows across 324 L/m conditions × 4 wind scenarios. Expected R² 0.70–0.85.",
     "color":        "var(--accent)",
     "bgColor":      "var(--accent-dim)",
-    "expected_r2":  "> 0.75",
-    "L_values":     [3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0],
-    "m_values":     [2.0, 5.0, 10.0, 20.0, 30.0, 50.0, 70.0, 100.0, 120.0, 150.0, 180.0, 200.0, 250.0, 300.0, 370.0, 420.0, 470.0, 500.0],
-    "Kp_steps": 5,  "Kp_min": 0.0,  "Kp_max": 600.0,
-    "Ki_steps": 5,  "Ki_min": 0.0,  "Ki_max": 200.0,
-    "Kd_steps": 5,  "Kd_min": 0.0,  "Kd_max": 200.0,
+    "expected_r2":  "0.70–0.85",
+
+    "L_values": [3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0],
+    "m_values": [2.0, 5.0, 10.0, 20.0, 30.0, 50.0, 70.0, 100.0, 120.0, 150.0, 180.0, 200.0, 250.0, 300.0, 370.0, 420.0, 470.0, 500.0],
+
+    "Kp_min": 0.5,  "Kp_max": 450.0, "Kp_steps": 7,  "Kp_log_scale": true,
+    "Ki_min": 0.0,  "Ki_max": 3.0,   "Ki_steps": 5,
+    "Kd_min": 0.0,  "Kd_max": 6.0,   "Kd_steps": 5,
+
     "wind_configs": [
       { "speed": 3.0,  "dir_deg": 0,   "disturbance_type": "step"    },
       { "speed": 6.0,  "dir_deg": 90,  "disturbance_type": "gust"    },
       { "speed": 10.0, "dir_deg": 180, "disturbance_type": "ramp"    },
       { "speed": 14.0, "dir_deg": 315, "disturbance_type": "impulse" }
-    ]
+    ],
+
+    "_stats": {
+      "output_rows":  1296,
+      "total_sims":   226800,
+      "est_minutes":  23,
+      "Kp_grid_logspace": "[0.50, 1.55, 4.81, 14.9, 46.1, 143.0, 450.0]  — m=50 opt≈20 near 14.9 (24%); m=150 opt≈118 near 143 (21%)"
+    }
   }
 }

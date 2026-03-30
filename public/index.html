@@ -511,6 +511,7 @@
           <div class="ai-cond-item"><div class="ai-cond-key">L</div><div class="ai-cond-val" id="ai-cond-L">—</div></div>
           <div class="ai-cond-item"><div class="ai-cond-key">mass</div><div class="ai-cond-val" id="ai-cond-m">—</div></div>
           <div class="ai-cond-item" style="grid-column:1/3"><div class="ai-cond-key">Wind</div><div class="ai-cond-val" id="ai-cond-wind">—</div></div>
+          <div class="ai-cond-item" style="grid-column:1/3"><div class="ai-cond-key">Disturbance</div><div class="ai-cond-val" id="ai-cond-disturbance">—</div></div>
         </div>
       </div>
 
@@ -773,6 +774,7 @@
           <div class="rep-card"><div class="rep-card-val" id="rep-card-updates">—</div><div class="rep-card-label">AI Updates</div></div>
           <div class="rep-card"><div class="rep-card-val" id="rep-card-forced">—</div><div class="rep-card-label">Forced</div></div>
           <div class="rep-card"><div class="rep-card-val" id="rep-card-conf">—</div><div class="rep-card-label">Model Confidence</div></div>
+          <div class="rep-card"><div class="rep-card-val" id="rep-card-gate">—</div><div class="rep-card-label">Within 5° (both axes)</div></div>
         </div>
 
         <!-- Two-column body: left (charts + phase table) | right (decision history) -->
@@ -791,7 +793,7 @@
               <div class="rep-chart-title">Metrics per phase</div>
               <div class="rep-table-wrap">
                 <table class="rep-table">
-                  <thead><tr><th>Phase</th><th>Avg θ</th><th>Max θ</th><th>Decisions</th></tr></thead>
+                  <thead><tr><th>Phase</th><th>Gate</th><th>Avg θ</th><th>Max θ (X/Y)</th><th>Within 5°</th><th>Decisions</th></tr></thead>
                   <tbody id="rep-phase-table-body"></tbody>
                 </table>
               </div>

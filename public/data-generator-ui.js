@@ -29,6 +29,7 @@ async function loadGeneratorModes() {
   const data = await resp.json();
   GENERATOR_MODES = {};
   for (const [key, mode] of Object.entries(data)) {
+    if (key.startsWith('_')) continue;  // skip metadata keys like _comment
     GENERATOR_MODES[key] = enrichMode(mode);
   }
 }
@@ -205,7 +206,7 @@ class DataGeneratorUI {
       Ki_min:       mode.Ki_min, Ki_max: mode.Ki_max, Ki_steps: mode.Ki_steps,
       Kd_min:       mode.Kd_min, Kd_max: mode.Kd_max, Kd_steps: mode.Kd_steps,
       wind_configs: mode.wind_configs,
-      b: 0.15, dt: 0.005, max_time: 30.0,
+      b: 1.2, dt: 0.005, max_time: 30.0,
     };
 
     this.activeWorker = new Worker('/data-generator-worker.js');
@@ -333,6 +334,7 @@ class DataGeneratorUI {
       { key: 'model_dataset_low',      label: 'B — LOW',      colorClass: 'warning' },
       { key: 'model_dataset_high',     label: 'C — HIGH',     colorClass: 'success' },
       { key: 'model_dataset_manual',   label: 'D — MANUAL',   colorClass: 'manual'  },
+      { key: 'model_dataset_auto',     label: 'E — AUTO',     colorClass: 'auto'    },
     ];
 
     container.innerHTML = entries.map(e => {
@@ -365,10 +367,43 @@ class DataGeneratorUI {
         ? `<button class="btn-sm btn-danger" onclick="dataGeneratorUI.resetExperiment('${e.key}')">✕ DELETE</button>`
         : '';
 
+      const confCol = (() => {
+        if (!hasModel || !meta) return '<div class="dg-conf-col dg-conf-empty"></div>';
+        const avg   = meta.avg_r2 ?? 0;
+        const label = meta.confidence_label ?? (window.confidenceLabel ? window.confidenceLabel(avg) : '');
+        const color = window.confidenceColor ? window.confidenceColor(avg) : 'var(--accent)';
+        const kpR2  = meta.metrics?.Kp?.r2 ?? 0;
+        const kiR2  = meta.metrics?.Ki?.r2 ?? 0;
+        const kdR2  = meta.metrics?.Kd?.r2 ?? 0;
+        const bar = (val, mini = false) => {
+          const c = window.confidenceColor ? window.confidenceColor(val) : 'var(--accent)';
+          return `<div class="dg-conf-bar-track${mini ? ' mini' : ''}"><div class="dg-conf-bar-fill" style="width:${(val * 100).toFixed(0)}%;background:${c}"></div></div>`;
+        };
+        const paramRow = (name, val) =>
+          `<div class="dg-conf-row">
+            <span class="dg-conf-row-name">${name}</span>
+            ${bar(val, true)}
+            <span class="dg-conf-row-val">${val.toFixed(2)}</span>
+          </div>`;
+        return `
+          <div class="dg-conf-col">
+            <div class="dg-conf-row">
+              <span class="dg-conf-row-name is-score" style="color:${color}">${avg.toFixed(2)}</span>
+              ${bar(avg)}
+              <span class="dg-conf-row-label" style="color:${color}">${label}</span>
+            </div>
+            <div class="dg-conf-sep"></div>
+            ${paramRow('Kp', kpR2)}
+            ${paramRow('Ki', kiR2)}
+            ${paramRow('Kd', kdR2)}
+          </div>`;
+      })();
+
       return `
         <div class="dataset-card dataset-card-${e.colorClass}">
           <div class="dataset-card-header">
             <span class="dataset-label">${e.label}</span>
+            ${confCol}
             <div class="dataset-card-actions">${buildBtn}${activateBtn}${resetBtn}</div>
           </div>
           <div class="dataset-card-status">${dataStatus}${modelStatus}</div>

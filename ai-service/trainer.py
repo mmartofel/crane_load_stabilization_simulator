@@ -10,7 +10,8 @@ def main():
     try:
         stats = p.train(csv_path)
         print(f"\nTraining complete — {stats['n_total']} rows used")
-        print(f"Score threshold: {stats['score_threshold']:.4f}")
+        t = stats.get('score_threshold')
+        print(f"Score threshold: {t:.4f}" if t is not None else "Score threshold: N/A")
         print(f"Trained at: {stats['trained_at']}\n")
         for param, m in stats['metrics'].items():
             stars = '★' * int(m['r2'] * 5)

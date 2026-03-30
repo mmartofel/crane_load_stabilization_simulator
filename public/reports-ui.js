@@ -167,22 +167,35 @@ function computePhaseMetrics(session) {
   ];
 
   const ts = session.timeseries || session.time_series || [];
-  const toTheta = p => p.theta != null
+  const toTheta  = p => p.theta != null
     ? p.theta
     : Math.hypot(p.theta_x || 0, p.theta_y || 0) * 180 / Math.PI;
+  const toThetaX = p => p.theta_x_deg != null
+    ? Math.abs(p.theta_x_deg)
+    : Math.abs((p.theta_x || 0) * 180 / Math.PI);
+  const toThetaY = p => p.theta_y_deg != null
+    ? Math.abs(p.theta_y_deg)
+    : Math.abs((p.theta_y || 0) * 180 / Math.PI);
 
   return phases.map(phase => {
     const slice = ts.filter(p => p.t >= phase.t_start && p.t < phase.t_end);
     if (slice.length === 0) {
-      return { ...phase, avg_theta: null, max_theta: null, decisions: 0, noData: true };
+      return { ...phase, avg_theta: null, max_theta: null, max_theta_x: null, max_theta_y: null,
+               pct_within_5: null, decisions: 0, noData: true };
     }
-    const thetas   = slice.map(toTheta);
+    const thetas    = slice.map(toTheta);
+    const thetasX   = slice.map(toThetaX);
+    const thetasY   = slice.map(toThetaY);
+    const within5   = slice.filter(p => toThetaX(p) < 5 && toThetaY(p) < 5).length;
     const decisions = (session.ai_decisions || [])
       .filter(d => d.t >= phase.t_start && d.t < phase.t_end).length;
     return {
       ...phase,
-      avg_theta: thetas.reduce((a, b) => a + b, 0) / thetas.length,
-      max_theta: Math.max(...thetas),
+      avg_theta:   thetas.reduce((a, b) => a + b, 0) / thetas.length,
+      max_theta:   Math.max(...thetas),
+      max_theta_x: Math.max(...thetasX),
+      max_theta_y: Math.max(...thetasY),
+      pct_within_5: +(within5 / slice.length * 100).toFixed(1),
       decisions,
       noData: false
     };
@@ -364,6 +377,20 @@ class ReportsUI {
     set('rep-card-max',     (m.max_theta_deg ?? '—') + '°');
     set('rep-card-updates', m.ai_updates ?? '—');
     set('rep-card-forced',  m.forced_updates ?? '—');
+
+    // Per-axis quality gate card (within 5° on both axes)
+    const gateEl = document.getElementById('rep-card-gate');
+    if (gateEl) {
+      if (m.pct_within_5deg != null) {
+        const pct  = m.pct_within_5deg;
+        const pass = pct >= 95;
+        gateEl.textContent = pct + '%';
+        gateEl.style.color = pass ? '#2ecc71' : (pct >= 70 ? '#f39c12' : '#e74c3c');
+      } else {
+        gateEl.textContent = '—';
+        gateEl.style.color = '';
+      }
+    }
 
     // AVG CONF card
     const decisions = session.ai_decisions || [];
@@ -656,20 +683,39 @@ class ReportsUI {
     if (!el) return;
     const phases = computePhaseMetrics(session);
     if (!phases || phases.length === 0) {
-      el.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-dim)">No phase data</td></tr>';
+      el.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-dim)">No phase data</td></tr>';
       return;
     }
+
+    // Quality gate badge: green if avg_theta < 5° on both axes, red otherwise
+    const gateBadge = phase => {
+      if (phase.avg_theta == null) return '<span style="color:var(--text-dim)">—</span>';
+      const pass = phase.avg_theta < 5.0
+        && (phase.max_theta_x == null || phase.max_theta_x < 5.0)
+        && (phase.max_theta_y == null || phase.max_theta_y < 5.0);
+      return pass
+        ? '<span style="color:#2ecc71;font-weight:700" title="Both axes within 5°">✓ OK</span>'
+        : '<span style="color:#e74c3c;font-weight:700" title="Exceeded 5° on at least one axis">✗ OVER</span>';
+    };
+
     el.innerHTML = phases.map(phase => {
       if (!phase || phase.noData) {
         return `<tr style="opacity:0.45">
           <td><span style="color:${phase?.color || '#888'}">■</span> ${phase?.label || '—'}</td>
-          <td>—</td><td>—</td><td>—</td>
+          <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
         </tr>`;
       }
+      const axInfo = phase.max_theta_x != null
+        ? `${phase.max_theta_x.toFixed(1)}° / ${phase.max_theta_y.toFixed(1)}°`
+        : '—';
+      const pct = phase.pct_within_5 != null ? phase.pct_within_5 + '%' : '—';
       return `<tr>
         <td><span style="color:${phase.color || '#888'}">■</span> ${phase.label}</td>
+        <td>${gateBadge(phase)}</td>
         <td>${phase.avg_theta != null ? phase.avg_theta.toFixed(2) + '°' : '—'}</td>
-        <td>${phase.max_theta != null ? phase.max_theta.toFixed(2) + '°' : '—'}</td>
+        <td>${phase.max_theta != null ? phase.max_theta.toFixed(2) + '°' : '—'}
+            <small style="color:var(--text-dim);margin-left:4px">${axInfo}</small></td>
+        <td>${pct}</td>
         <td>${phase.decisions ?? '—'}</td>
       </tr>`;
     }).join('');
