@@ -1,6 +1,6 @@
 {
-  "active_experiment": "model_dataset_auto",
-  "updated_at": "2026-03-28T22:10:46.469Z",
-  "model_path": "/Users/mmartofe/tmp/DZWIK/crane-simulator/data/experiments/model_dataset_auto/model.joblib",
-  "meta_path": "/Users/mmartofe/tmp/DZWIK/crane-simulator/data/experiments/model_dataset_auto/model_metadata.json"
+  "active_experiment": "model_dataset_high",
+  "updated_at": "2026-03-28T23:35:24.578Z",
+  "model_path": "/Users/mmartofe/tmp/DZWIK/crane-simulator/data/experiments/model_dataset_high/model.joblib",
+  "meta_path": "/Users/mmartofe/tmp/DZWIK/crane-simulator/data/experiments/model_dataset_high/model_metadata.json"
 }

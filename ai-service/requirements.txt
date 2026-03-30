@@ -5,3 +5,5 @@ pandas>=2.2.2
 numpy>=2.1.0
 joblib>=1.4.0
 requests>=2.32.0
+matplotlib>=3.9.0
+seaborn>=0.13.0
