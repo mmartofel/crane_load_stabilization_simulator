@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-generate_optimal_pid.py  —  v6 (parallel CPU execution + optional Numba JIT)
+generate_optimal_pid.py  —  v7 (parallel CPU execution)
 ══════════════════════════════════════════════════════════════════════════════
 Generates training CSV where every row contains Kp/Ki/Kd derived from
 control-theory formulas, not simulation scoring.
@@ -11,9 +11,14 @@ WHY ANALYTICAL:
   converges to the mean rather than the optimum (R²≈0).  The analytical
   approach creates a smooth, learnable mapping:
     Kp = alpha(wind_loading) * m*g/L    alpha grows with wind/gravity ratio
-    Ki = beta(wind_loading)  * Kp / T   small integral to remove SS error
-    Kd = GAMMA_KD * T                   non-zero derivative for b=1.2 system
+    Ki = beta(wind_loading)  * Kp / T   integral to remove SS error, capped at KI_MAX
+    Kd = GAMMA_KD * T                   derivative for b=1.2 system, capped at KD_MAX
   Plus Gaussian perturbations so the ML model generalises not memorises.
+
+GAIN RANGES (empirically validated):
+  Kp  0 – 40    (manual tuning confirmed best stabilisation in this range)
+  Ki  0 – 20    (hard-capped; integral wind-up guard)
+  Kd  0 – 40    (hard-capped; derivative amplifies noise above this point)
 
 PHYSICS ALIGNMENT (v5 changes):
   Force application now matches sim.js PropellerMixer routing exactly:
@@ -21,11 +26,9 @@ PHYSICS ALIGNMENT (v5 changes):
   This gives 6.667× force amplification (SCALE=0.15) and saturates at ±44.44 N,
   identical to ui.js / ai-ui.js / runHeadless.
 
-PARALLELISM (v6 changes):
+PARALLELISM (v6+ changes):
   All conditions run in parallel via ProcessPoolExecutor (CPU cores).
-  When numba is installed, simulate() is JIT-compiled for additional 20–50×
-  speedup per core.
-  Expected wall-clock: ~30 s (multiprocessing) → ~5 s (+ numba) on 16-core machine.
+  Expected wall-clock: ~30 s on a 16-core machine.
 
 USAGE:
   python generate_optimal_pid.py                     # full dataset
@@ -56,16 +59,18 @@ SETTLE_DUR   = 2.0
 SCALE = 0.15
 
 ALPHA_KP_BASE  = 0.30
-ALPHA_KP_MAX   = 0.55
+ALPHA_KP_MAX   = 0.85   # Kp = alpha * m*g/L; 0.85 ≈ 85% of critical gain at high wind loading (was 0.55)
 ALPHA_KP_SLOPE = 3.0
 ALPHA_KI_BASE  = 0.04
-ALPHA_KI_MAX   = 0.10
+ALPHA_KI_MAX   = 0.50   # Ki = alpha_i * Kp / T; 0.50 gives Ki up to ~5.8 at Kp=40, T=3.5s (was 0.10)
 
-KP_MAX = 18.0
-GAMMA_KD = 0.40
-NOISE_KD = 0.12
-NOISE_KP = 0.08
-NOISE_KI = 0.15
+KP_MAX   = 40.0   # hard ceiling on proportional gain; at m=50,L=10: kpc=49, alpha*kpc=42→capped
+KI_MAX   = 20.0   # hard ceiling on integral gain; prevents wind-up at high Kp / short rope
+KD_MAX   = 40.0   # hard ceiling on derivative gain; max useful damping across all rope lengths
+GAMMA_KD = 2.0    # Kd = GAMMA_KD * T (pendulum period); L=10m → Kd≈12.6, L=20m → ≈18 (was 0.40)
+NOISE_KD = 0.20   # ±20% Gaussian perturbation on Kd — wider exploration of derivative space (was 0.12)
+NOISE_KP = 0.10   # ±10% perturbation on Kp — keeps proportional gain near physics optimum (was 0.08)
+NOISE_KI = 0.20   # ±20% perturbation on Ki — integral varies more to capture wind diversity (was 0.15)
 
 CSV_HEADER = [
     'timestamp','L','m','Kp','Ki','Kd',
@@ -74,7 +79,7 @@ CSV_HEADER = [
     'steady_state_error','score','status',
 ]
 
-# Disturbance type codes (used by numba-compiled core and GPU version)
+# Disturbance type codes (used by GPU version)
 DIST_MAP = {'step': 0, 'impulse': 1, 'ramp': 2, 'gust': 3}
 
 # Pre-computed simulation constants
@@ -83,96 +88,6 @@ _DIV_RAD  = math.radians(DIVERGE_DEG)
 _THR_RAD  = math.radians(SETTLE_DEG)
 _SCALE_SQ = SCALE * SCALE
 _TWO_PI_3 = 2.0 * math.pi / 3.0
-
-# ── Optional Numba JIT ────────────────────────────────────────────────────────
-try:
-    import numba as _numba
-    _HAS_NUMBA = True
-except ImportError:
-    _numba = None
-    _HAS_NUMBA = False
-
-if _HAS_NUMBA:
-    @_numba.njit(cache=True, fastmath=True)
-    def _sim_core(Fx0, Fy0, Kp, Ki, Kd, m, L, dist_code):
-        """JIT-compiled simulation core. Returns tuple instead of dict/None.
-
-        Returns:
-            (diverged, ISE, IAE, ITAE, ts, max_t_rad, ss_rad, score)
-            diverged=True means simulation blew up — caller should skip this row.
-            ts < 0 means simulation never settled within MAX_TIME.
-        """
-        tx=ty=ox=oy=ix=iy=pex=pey=0.0
-        ISE=IAE=ITAE=max_t=sc=0.0
-        ts = -1.0
-
-        for step in range(_N_STEPS):
-            t = step * DT
-
-            # Disturbance envelope
-            if dist_code == 0:   # step
-                f = 1.0 if t >= 1.0 else 0.0
-            elif dist_code == 1: # impulse
-                f = 3.0 if 1.0 <= t <= 1.5 else 0.0
-            elif dist_code == 2: # ramp
-                f = t / 10.0 if t < 10.0 else 1.0
-            else:                # gust
-                f = 1.0 + 0.4 * math.sin(_TWO_PI_3 * t)
-
-            Fx = Fx0 * f
-            Fy = Fy0 * f
-
-            # PID
-            ex = tx; ey = ty
-            v = ix + ex * DT
-            ix = v if -50.0 <= v <= 50.0 else (50.0 if v > 50.0 else -50.0)
-            v = iy + ey * DT
-            iy = v if -50.0 <= v <= 50.0 else (50.0 if v > 50.0 else -50.0)
-            dex = (ex - pex) / DT if step > 0 else 0.0
-            dey = (ey - pey) / DT if step > 0 else 0.0
-            pex = ex; pey = ey
-
-            raw_x = Kp * ex + Ki * ix + Kd * dex
-            raw_y = Kp * ey + Ki * iy + Kd * dey
-            cx = raw_x * SCALE
-            cy = raw_y * SCALE
-            cx = cx if -1.0 <= cx <= 1.0 else (1.0 if cx > 1.0 else -1.0)
-            cy = cy if -1.0 <= cy <= 1.0 else (1.0 if cy > 1.0 else -1.0)
-            fpx = cx / _SCALE_SQ
-            fpy = cy / _SCALE_SQ
-
-            # Euler integration
-            ax = (Fx - B * ox - m * G * tx - fpx) / (m * L)
-            ay = (Fy - B * oy - m * G * ty - fpy) / (m * L)
-            ox += ax * DT; oy += ay * DT
-            tx += ox * DT; ty += oy * DT
-
-            tm = (tx * tx + ty * ty) ** 0.5
-            if tm > _DIV_RAD:
-                return True, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0  # diverged
-
-            tsq = tx * tx + ty * ty
-            ISE  += tsq * DT
-            IAE  += tsq ** 0.5 * DT
-            ITAE += t * tsq ** 0.5 * DT
-            if tm > max_t:
-                max_t = tm
-
-            if tm < _THR_RAD:
-                sc += DT
-                if sc >= SETTLE_DUR:
-                    if ts < 0.0:
-                        ts = t - SETTLE_DUR
-                    break
-            else:
-                sc = 0.0
-
-        ss = (tx * tx + ty * ty) ** 0.5
-        t_norm = (ts if ts >= 0.0 else MAX_TIME) / MAX_TIME
-        score = (0.30 * min(ISE / 10.0, 1.0) + 0.20 * min(IAE / 20.0, 1.0) +
-                 0.30 * min(ITAE / 200.0, 1.0) + 0.15 * min(t_norm, 1.0) +
-                 0.05 * min(max_t * 57.29578 / 20.0, 1.0))
-        return False, ISE, IAE, ITAE, ts, max_t, ss, score
 
 # ── Physics helpers ───────────────────────────────────────────────────────────
 
@@ -195,8 +110,8 @@ def perturbed_gains(L, m, ws, rng):
     Kp0, Ki0, Kd0 = optimal_gains(L, m, ws)
     kpc = kp_critical(L, m); T = period(L)
     Kp  = float(np.clip(Kp0 * (1 + rng.normal(0, NOISE_KP)), 0.05*min(kpc, KP_MAX), KP_MAX))
-    Ki  = float(np.clip(Ki0 * (1 + rng.normal(0, NOISE_KI)), 0.0, 0.3*Kp/T))
-    Kd  = float(np.clip(Kd0 * (1 + rng.normal(0, NOISE_KD)), 0.0, 1.5*T))
+    Ki  = float(np.clip(Ki0 * (1 + rng.normal(0, NOISE_KI)), 0.0, KI_MAX))   # was: 0.3*Kp/T
+    Kd  = float(np.clip(Kd0 * (1 + rng.normal(0, NOISE_KD)), 0.0, KD_MAX))   # was: 1.5*T
     return Kp, Ki, Kd
 
 # ── Simulation ────────────────────────────────────────────────────────────────
@@ -207,23 +122,6 @@ def simulate(L, m, Kp, Ki, Kd, ws, wd, dist='step'):
     Fx0  = ws * math.cos(wr)
     Fy0  = ws * math.sin(wr)
 
-    if _HAS_NUMBA:
-        dc = DIST_MAP.get(dist, 0)
-        div, ISE, IAE, ITAE, ts, max_t, ss, score = _sim_core(Fx0, Fy0, Kp, Ki, Kd, m, L, dc)
-        if div:
-            return None
-        return {
-            'ISE':   round(float(ISE),  4),
-            'IAE':   round(float(IAE),  4),
-            'ITAE':  round(float(ITAE), 4),
-            't_settle':          round(float(ts), 2) if ts >= 0.0 else None,
-            'overshoot_deg':     round(math.degrees(max_t), 3),
-            'steady_state_error':round(math.degrees(ss), 4),
-            'score': round(float(score), 4),
-            'status': 'ok',
-        }
-
-    # Pure-Python fallback (identical physics, no JIT)
     n = _N_STEPS
     div = _DIV_RAD; thr = _THR_RAD
     tx=ty=ox=oy=ix=iy=pex=pey=0.
@@ -323,20 +221,13 @@ def main(out_path, quick, n_workers=None):
     args_list = [(L,m,ws,wd,d,noisy,seeds[i])
                  for i,(L,m,ws,wd,d,noisy) in enumerate(conds)]
 
-    jit_tag = ' + numba JIT' if _HAS_NUMBA else ' (install numba for extra speedup)'
-    est_min = total * 0.05 / 60 / n_workers * (0.05 if _HAS_NUMBA else 1.0)
+    est_min = total * 0.05 / 60 / n_workers
     print(f'\n{"="*64}')
-    print(f'  Crane PID Analytical Data Generator  v6')
-    print(f'  Rows      : {total}  |  Workers : {n_workers}{jit_tag}')
+    print(f'  Crane PID Analytical Data Generator  v7')
+    print(f'  Rows      : {total}  |  Workers : {n_workers}')
     print(f'  Est. time : ~{max(est_min, 0.1):.1f} min')
     print(f'  Output    : {out}')
     print(f'{"="*64}\n')
-
-    if _HAS_NUMBA:
-        # Warm up JIT before spawning workers (avoids redundant compilation per process)
-        print('  Warming up Numba JIT...', end=' ', flush=True)
-        simulate(10., 50., 5., 0.5, 2., 8., 45., 'step')
-        print('done\n')
 
     ok = failed = 0
     t0 = time.time()

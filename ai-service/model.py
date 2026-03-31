@@ -141,9 +141,9 @@ class PIDPredictor:
         T  = 2 * np.pi / np.sqrt(g / max(L, 0.1))
         kpc = m * g / max(L, 0.1)
         return {
-            'Kp': round(min(kpc * 0.55, 18), 2),
-            'Ki': round(0.1 / max(L / 10, 0.1), 3),
-            'Kd': round(T * 0.4, 2),
+            'Kp': round(min(kpc * 0.85, 40), 2),          # 85% of critical gain, capped at 40
+            'Ki': round(min(0.5 * kpc / T, 20), 3),        # 50% * Kp/T ratio, capped at 20
+            'Kd': round(min(T * 2.0, 40), 2),              # 2× pendulum period, capped at 40
             'confidence':        0.0,
             'confidence_detail': {'Kp': 0.0, 'Ki': 0.0, 'Kd': 0.0},
             'confidence_label':  'FALLBACK',
