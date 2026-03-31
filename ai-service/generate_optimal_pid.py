@@ -62,8 +62,8 @@ ALPHA_KI_BASE  = 0.04
 ALPHA_KI_MAX   = 0.10
 
 KP_MAX = 18.0
-GAMMA_KD     = 0.40
-NOISE_KD     = 0.12
+GAMMA_KD = 0.40
+NOISE_KD = 0.12
 NOISE_KP = 0.08
 NOISE_KI = 0.15
 
@@ -278,14 +278,14 @@ def simulate(L, m, Kp, Ki, Kd, ws, wd, dist='step'):
 
 def build_conditions(quick):
     if quick:
-        L_v=[5.,10.,15.]; m_v=[10.,50.,200.]
-        ws_v=[3.,10.]; wd_v=[45.,225.]; dist_v=['step']; n_p=2
+        L_v=[5.,10.,15.]; m_v=[2.,10.,50.,150.]
+        ws_v=[3.,10.]; wd_v=[45.,225.]; dist_v=['step']; n_p=3
     else:
         L_v=[3.,5.,7.,10.,12.,15.,20.]
-        m_v=[2.,5.,10.,20.,50.,100.,200.,500.]
-        ws_v=[2.,5.,8.,12.,16.,20.]
-        wd_v=[0.,45.,90.,135.,180.,270.,315.]
-        dist_v=['step','impulse','ramp','gust']; n_p=3
+        m_v=[2.,5.,10.,20.,50.,100.,150.,200.,500.]
+        ws_v=[2.,3.,4.,5.,6.,7.,8.,9.,10.,11.,12.,13.,14.,15.,16.,17.,18.,19.,20.]
+        wd_v=[0.,45.,60.,90.,135.,180.,200.,270.,315.]
+        dist_v=['step','impulse','ramp','gust','rotate']; n_p=5
 
     conds=[]
     for L in L_v:
