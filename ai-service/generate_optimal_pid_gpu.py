@@ -53,7 +53,7 @@ except ImportError:
 # Import physics constants and condition builder from the CPU version
 from generate_optimal_pid import (
     G, B, DT, MAX_TIME, SCALE, DIVERGE_DEG, SETTLE_DEG, SETTLE_DUR,
-    KP_MAX, GAMMA_KD, NOISE_KP, NOISE_KI, NOISE_KD,
+    KP_MAX, KI_MAX, KD_MAX, GAMMA_KD, NOISE_KP, NOISE_KI, NOISE_KD,
     ALPHA_KP_BASE, ALPHA_KP_MAX, ALPHA_KP_SLOPE, ALPHA_KI_BASE, ALPHA_KI_MAX,
     DIST_MAP, CSV_HEADER,
     optimal_gains, perturbed_gains, build_conditions,

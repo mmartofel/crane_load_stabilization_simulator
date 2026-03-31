@@ -230,9 +230,9 @@ export function computePhysicsRanges(L, m) {
   const Kp_def  = +(m * 0.30).toFixed(1);
   const Kp_step = Kp_max > 50 ? 1.0 : (Kp_max > 10 ? 0.5 : 0.1);
 
-  const Kd_max  = +(T * 1.4).toFixed(1);
+  const Kd_max  = Math.min(+(T * 6.3).toFixed(1), 40);   // 6.3×T caps at 40; for L=10m → 39.7, L=20m → 40
   const Kd_min  = +(T * 0.05).toFixed(2);
-  const Kd_def  = +(T * 0.7).toFixed(1);
+  const Kd_def  = +(T * 2.0).toFixed(1);                 // default matches GAMMA_KD=2.0 in generator
   const Kd_step = Kd_max > 5 ? 0.5 : 0.1;
 
   return {
@@ -240,6 +240,6 @@ export function computePhysicsRanges(L, m) {
     Kp_crit: m,
     Kp: { min: Kp_min, max: Kp_max, default: Kp_def, step: Kp_step },
     Kd: { min: Kd_min, max: Kd_max, default: Kd_def, step: Kd_step },
-    Ki: { min: L < 5 ? 0 : 0.01, max: 0.40, default: 0.10, step: 0.01 },
+    Ki: { min: L < 5 ? 0 : 0.01, max: 20, default: 0.10, step: 0.1 },
   };
 }

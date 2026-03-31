@@ -101,9 +101,9 @@ class AIController {
       // Local analytical fallback
       const g = 9.81, T = 2 * Math.PI / Math.sqrt(g / Math.max(L, 0.1));
       return {
-        Kp: Math.min((m * g / Math.max(L, 0.1)) * 0.55, 18),
-        Ki: 0.1 / Math.max(L / 10, 0.1),
-        Kd: T * 0.4,
+        Kp: Math.min((m * g / Math.max(L, 0.1)) * 0.85, 40),           // 85% of critical gain, capped at 40
+        Ki: Math.min(0.5 * (m * g / Math.max(L, 0.1)) / T, 20),       // 50% * Kp/T ratio, capped at 20
+        Kd: Math.min(T * 2.0, 40),                                      // 2× pendulum period, capped at 40
         confidence: 0, model: 'fallback', fallback: true, explanation: null
       };
     }

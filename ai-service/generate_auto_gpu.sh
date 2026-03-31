@@ -17,7 +17,7 @@ source .venv/bin/activate
 pip install --upgrade pip
 
 # Install all non-torch dependencies
-pip install -r requirements_gpu.txt
+pip install -qq -r requirements_gpu.txt
 
 # Install PyTorch from the official index (required for CUDA builds)
 pip install torch --index-url "https://download.pytorch.org/whl/${CUDA_TAG}"

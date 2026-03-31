@@ -5,6 +5,6 @@ source .venv/bin/activate
 
 # upgrade pip and install dependencies
 pip install --upgrade pip
-pip install -r requirements.txt
+pip install -qq -r requirements.txt
 
-python3 generate_optimal_pid.py --quick --workers 8
+python3 generate_optimal_pid.py  --workers 32 # --quick
