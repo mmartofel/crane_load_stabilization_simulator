@@ -15,10 +15,10 @@ WHY ANALYTICAL:
     Kd = GAMMA_KD * T                   derivative for b=1.2 system, capped at KD_MAX
   Plus Gaussian perturbations so the ML model generalises not memorises.
 
-GAIN RANGES (empirically validated):
-  Kp  0 – 40    (manual tuning confirmed best stabilisation in this range)
-  Ki  0 – 20    (hard-capped; integral wind-up guard)
-  Kd  0 – 40    (hard-capped; derivative amplifies noise above this point)
+GAIN RANGES (empirically validated — hard limits, never exceeded):
+  Kp  30 – 36
+  Ki  13 – 16
+  Kd  18 – 21
 
 PHYSICS ALIGNMENT (v5 changes):
   Force application now matches sim.js PropellerMixer routing exactly:
@@ -58,19 +58,19 @@ SETTLE_DUR   = 2.0
 # PropellerMixer scale — must match sim.js PropellerMixer.scale
 SCALE = 0.15
 
-ALPHA_KP_BASE  = 0.30
-ALPHA_KP_MAX   = 0.85   # Kp = alpha * m*g/L; 0.85 ≈ 85% of critical gain at high wind loading (was 0.55)
-ALPHA_KP_SLOPE = 3.0
-ALPHA_KI_BASE  = 0.04
-ALPHA_KI_MAX   = 0.50   # Ki = alpha_i * Kp / T; 0.50 gives Ki up to ~5.8 at Kp=40, T=3.5s (was 0.10)
+# Hard gain bounds — all generated values are clamped to these ranges regardless of conditions
+KP_MIN = 30.0;  KP_MAX = 36.0
+KI_MIN = 13.0;  KI_MAX = 16.0
+KD_MIN = 18.0;  KD_MAX = 21.0
 
-KP_MAX   = 40.0   # hard ceiling on proportional gain; at m=50,L=10: kpc=49, alpha*kpc=42→capped
-KI_MAX   = 20.0   # hard ceiling on integral gain; prevents wind-up at high Kp / short rope
-KD_MAX   = 40.0   # hard ceiling on derivative gain; max useful damping across all rope lengths
-GAMMA_KD = 2.0    # Kd = GAMMA_KD * T (pendulum period); L=10m → Kd≈12.6, L=20m → ≈18 (was 0.40)
-NOISE_KD = 0.20   # ±20% Gaussian perturbation on Kd — wider exploration of derivative space (was 0.12)
-NOISE_KP = 0.10   # ±10% perturbation on Kp — keeps proportional gain near physics optimum (was 0.08)
-NOISE_KI = 0.20   # ±20% perturbation on Ki — integral varies more to capture wind diversity (was 0.15)
+# Nominal gain centers (midpoints of validated ranges)
+KP_NOM = 33.0
+KI_NOM = 14.5
+KD_NOM = 19.5
+
+NOISE_KP = 0.05   # ±5% Gaussian perturbation on Kp — spreads within 30–36 range
+NOISE_KI = 0.08   # ±8% perturbation on Ki — spreads within 13–16 range
+NOISE_KD = 0.05   # ±5% perturbation on Kd — spreads within 18–21 range
 
 CSV_HEADER = [
     'timestamp','L','m','Kp','Ki','Kd',
@@ -91,27 +91,15 @@ _TWO_PI_3 = 2.0 * math.pi / 3.0
 
 # ── Physics helpers ───────────────────────────────────────────────────────────
 
-def kp_critical(L, m):   return m * G / L
-def period(L):            return 2.0 * math.pi * math.sqrt(L / G)
-def wind_loading(ws, m):  return (ws / (m * G)) / math.radians(5.0)
-
 def optimal_gains(L, m, ws):
-    kpc = kp_critical(L, m)
-    T   = period(L)
-    wl  = wind_loading(ws, m)
-    akp = ALPHA_KP_BASE + (ALPHA_KP_MAX - ALPHA_KP_BASE) * (1 - math.exp(-ALPHA_KP_SLOPE * wl))
-    aki = ALPHA_KI_BASE + (ALPHA_KI_MAX - ALPHA_KI_BASE) * (1 - math.exp(-ALPHA_KP_SLOPE * wl))
-    Kp  = min(akp * kpc, KP_MAX)
-    Ki  = aki * Kp / T
-    Kd  = GAMMA_KD * T
-    return Kp, Ki, Kd
+    """Return nominal gains — always within validated ranges."""
+    return KP_NOM, KI_NOM, KD_NOM
 
 def perturbed_gains(L, m, ws, rng):
-    Kp0, Ki0, Kd0 = optimal_gains(L, m, ws)
-    kpc = kp_critical(L, m); T = period(L)
-    Kp  = float(np.clip(Kp0 * (1 + rng.normal(0, NOISE_KP)), 0.05*min(kpc, KP_MAX), KP_MAX))
-    Ki  = float(np.clip(Ki0 * (1 + rng.normal(0, NOISE_KI)), 0.0, KI_MAX))   # was: 0.3*Kp/T
-    Kd  = float(np.clip(Kd0 * (1 + rng.normal(0, NOISE_KD)), 0.0, KD_MAX))   # was: 1.5*T
+    """Gaussian noise around nominal, hard-clamped to validated ranges."""
+    Kp = float(np.clip(KP_NOM * (1 + rng.normal(0, NOISE_KP)), KP_MIN, KP_MAX))
+    Ki = float(np.clip(KI_NOM * (1 + rng.normal(0, NOISE_KI)), KI_MIN, KI_MAX))
+    Kd = float(np.clip(KD_NOM * (1 + rng.normal(0, NOISE_KD)), KD_MIN, KD_MAX))
     return Kp, Ki, Kd
 
 # ── Simulation ────────────────────────────────────────────────────────────────
