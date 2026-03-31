@@ -1,0 +1,12 @@
+fastapi>=0.111.0
+uvicorn>=0.30.0
+scikit-learn>=1.5.0
+numpy>=2.1.0
+joblib>=1.4.0
+requests>=2.32.0
+matplotlib>=3.9.0
+seaborn>=0.13.0
+pandas>=2.2.2
+numba>=0.60.0
+# torch is installed separately by generate_auto_gpu.sh with the CUDA index URL:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
