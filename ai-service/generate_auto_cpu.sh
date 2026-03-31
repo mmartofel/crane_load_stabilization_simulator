@@ -7,4 +7,4 @@ source .venv/bin/activate
 pip install --upgrade pip
 pip install -qq -r requirements.txt
 
-python3 generate_optimal_pid.py  --workers 8 # --quick
+python3 generate_optimal_pid.py  --workers 32 # --quick
