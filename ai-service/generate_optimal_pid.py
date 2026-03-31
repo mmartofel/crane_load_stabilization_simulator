@@ -58,19 +58,23 @@ SETTLE_DUR   = 2.0
 # PropellerMixer scale — must match sim.js PropellerMixer.scale
 SCALE = 0.15
 
-# Hard gain bounds — all generated values are clamped to these ranges regardless of conditions
+# Hard gain bounds — outputs are ALWAYS clamped to these ranges
 KP_MIN = 30.0;  KP_MAX = 36.0
 KI_MIN = 13.0;  KI_MAX = 16.0
 KD_MIN = 18.0;  KD_MAX = 21.0
 
-# Nominal gain centers (midpoints of validated ranges)
-KP_NOM = 33.0
-KI_NOM = 14.5
-KD_NOM = 19.5
+# Wind-loading saturation rate for Kp/Ki formula.
+# Calibrated so that at nominal (L=10m, m=50kg, ws=8 m/s) → wl≈0.187 → ratio=0.5 → center of range.
+ALPHA_WL = 3.7
 
-NOISE_KP = 0.05   # ±5% Gaussian perturbation on Kp — spreads within 30–36 range
-NOISE_KI = 0.08   # ±8% perturbation on Ki — spreads within 13–16 range
-NOISE_KD = 0.05   # ±5% perturbation on Kd — spreads within 18–21 range
+# Noise (absolute, in gain units) — spreads training data across full range without leaving it
+NOISE_KP = 1.5   # ±1.5 around optimal Kp (range width = 6)
+NOISE_KI = 0.75  # ±0.75 around optimal Ki (range width = 3)
+NOISE_KD = 0.75  # ±0.75 around optimal Kd (range width = 3)
+
+# Rope-period extremes for Kd linear mapping: L=3m → Kd=KD_MIN, L=20m → Kd=KD_MAX
+_T_LO = 2.0 * math.pi * math.sqrt(3.0  / G)   # ≈ 3.47 s
+_T_HI = 2.0 * math.pi * math.sqrt(20.0 / G)   # ≈ 8.97 s
 
 CSV_HEADER = [
     'timestamp','L','m','Kp','Ki','Kd',
@@ -91,15 +95,29 @@ _TWO_PI_3 = 2.0 * math.pi / 3.0
 
 # ── Physics helpers ───────────────────────────────────────────────────────────
 
+def period(L):           return 2.0 * math.pi * math.sqrt(L / G)
+def wind_loading(ws, m): return (ws / (m * G)) / math.radians(5.0)
+
 def optimal_gains(L, m, ws):
-    """Return nominal gains — always within validated ranges."""
-    return KP_NOM, KI_NOM, KD_NOM
+    """Physics-based gains, always within validated ranges.
+    Kp/Ki scale with wind loading (low wind → near min, high wind → near max).
+    Kd scales with rope period (short rope → near min, long rope → near max).
+    This creates a learnable ML mapping while respecting the hard bounds."""
+    wl = wind_loading(ws, m)
+    T  = period(L)
+    ratio_wl = 1.0 - math.exp(-ALPHA_WL * wl)
+    ratio_T  = max(0.0, min(1.0, (T - _T_LO) / (_T_HI - _T_LO)))
+    Kp = KP_MIN + (KP_MAX - KP_MIN) * ratio_wl
+    Ki = KI_MIN + (KI_MAX - KI_MIN) * ratio_wl
+    Kd = KD_MIN + (KD_MAX - KD_MIN) * ratio_T
+    return Kp, Ki, Kd
 
 def perturbed_gains(L, m, ws, rng):
-    """Gaussian noise around nominal, hard-clamped to validated ranges."""
-    Kp = float(np.clip(KP_NOM * (1 + rng.normal(0, NOISE_KP)), KP_MIN, KP_MAX))
-    Ki = float(np.clip(KI_NOM * (1 + rng.normal(0, NOISE_KI)), KI_MIN, KI_MAX))
-    Kd = float(np.clip(KD_NOM * (1 + rng.normal(0, NOISE_KD)), KD_MIN, KD_MAX))
+    """Gaussian noise (absolute) around physics optimal, hard-clamped to validated ranges."""
+    Kp0, Ki0, Kd0 = optimal_gains(L, m, ws)
+    Kp = float(np.clip(Kp0 + rng.normal(0, NOISE_KP), KP_MIN, KP_MAX))
+    Ki = float(np.clip(Ki0 + rng.normal(0, NOISE_KI), KI_MIN, KI_MAX))
+    Kd = float(np.clip(Kd0 + rng.normal(0, NOISE_KD), KD_MIN, KD_MAX))
     return Kp, Ki, Kd
 
 # ── Simulation ────────────────────────────────────────────────────────────────
